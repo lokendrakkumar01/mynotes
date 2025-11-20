@@ -1,0 +1,646 @@
+// DOM Elements
+const loginContainer = document.getElementById('loginContainer');
+const appContainer = document.getElementById('appContainer');
+const loginFormContainer = document.getElementById('loginFormContainer');
+const registerFormContainer = document.getElementById('registerFormContainer');
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const registerLink = document.getElementById('registerLink');
+const loginLink = document.getElementById('loginLink');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const regUsernameInput = document.getElementById('regUsername');
+const regEmailInput = document.getElementById('regEmail');
+const regPasswordInput = document.getElementById('regPassword');
+const regConfirmPasswordInput = document.getElementById('regConfirmPassword');
+const profileImageInput = document.getElementById('profileImageInput');
+const profileUploadBtn = document.getElementById('profileUploadBtn');
+const profilePlaceholder = document.getElementById('profilePlaceholder');
+const profileImage = document.getElementById('profileImage');
+const headerProfilePlaceholder = document.getElementById('headerProfilePlaceholder');
+const headerProfileImage = document.getElementById('headerProfileImage');
+const userAvatar = document.getElementById('userAvatar');
+const userName = document.getElementById('userName');
+const userEmail = document.getElementById('userEmail');
+const logoutBtn = document.getElementById('logoutBtn');
+const contactBtn = document.getElementById('contactBtn');
+const themeToggle = document.getElementById('themeToggle');
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const progressContainer = document.getElementById('progressContainer');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+const searchInput = document.getElementById('searchInput');
+const filterButtons = document.querySelectorAll('.filter-btn');
+const filesGrid = document.getElementById('filesGrid');
+const previewModal = document.getElementById('previewModal');
+const closePreview = document.getElementById('closePreview');
+const previewTitle = document.getElementById('previewTitle');
+const previewBody = document.getElementById('previewBody');
+const contactModal = document.getElementById('contactModal');
+const closeContact = document.getElementById('closeContact');
+const contactForm = document.getElementById('contactForm');
+const googleFormBtn = document.getElementById('googleFormBtn');
+const notification = document.getElementById('notification');
+const notificationText = document.getElementById('notificationText');
+
+// State variables
+let currentUser = null;
+let users = JSON.parse(localStorage.getItem('notesUsers')) || [];
+let files = JSON.parse(localStorage.getItem('notesFiles')) || [];
+let currentFilter = 'all';
+let currentSearch = '';
+let profileImageData = null;
+
+// Initialize the app
+function init() {
+    checkLoginStatus();
+    setupEventListeners();
+    loadThemePreference();
+}
+
+// Check if user is already logged in
+function checkLoginStatus() {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        showApp();
+    } else {
+        showLogin();
+    }
+}
+
+// Set up event listeners
+function setupEventListeners() {
+    // Login/Register forms
+    loginForm.addEventListener('submit', handleLogin);
+    registerForm.addEventListener('submit', handleRegister);
+    registerLink.addEventListener('click', showRegisterForm);
+    loginLink.addEventListener('click', showLoginForm);
+
+    // Profile image upload
+    profileUploadBtn.addEventListener('click', () => profileImageInput.click());
+    profileImageInput.addEventListener('change', handleProfileImageUpload);
+
+    // Logout
+    logoutBtn.addEventListener('click', handleLogout);
+
+    // Contact
+    contactBtn.addEventListener('click', () => contactModal.classList.add('active'));
+    closeContact.addEventListener('click', () => contactModal.classList.remove('active'));
+    contactForm.addEventListener('submit', handleContactForm);
+    googleFormBtn.addEventListener('click', () => {
+        window.open('https://docs.google.com/forms/d/e/1FAIpQLScg5nk-Iy90l9r5YqZncerzm2iGJmBx43lmRzm_UXusisw84w/viewform?usp=sf_link', '_blank');
+        contactModal.classList.remove('active');
+        showNotification('Google Form opened in new tab');
+    });
+
+    // Theme toggle
+    themeToggle.addEventListener('click', toggleTheme);
+
+    // File upload
+    uploadArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileUpload);
+
+    // Drag and drop
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const droppedFiles = e.dataTransfer.files;
+        handleFiles(droppedFiles);
+    });
+
+    // Search and filter
+    searchInput.addEventListener('input', (e) => {
+        currentSearch = e.target.value.toLowerCase();
+        renderFiles();
+    });
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            currentFilter = button.dataset.filter;
+            renderFiles();
+        });
+    });
+
+    // Preview modal
+    closePreview.addEventListener('click', () => {
+        previewModal.classList.remove('active');
+    });
+
+    // Close modal when clicking outside
+    previewModal.addEventListener('click', (e) => {
+        if (e.target === previewModal) {
+            previewModal.classList.remove('active');
+        }
+    });
+
+    contactModal.addEventListener('click', (e) => {
+        if (e.target === contactModal) {
+            contactModal.classList.remove('active');
+        }
+    });
+}
+
+// Show login form
+function showLoginForm(e) {
+    e.preventDefault();
+    loginFormContainer.style.display = 'block';
+    registerFormContainer.style.display = 'none';
+    resetRegisterForm();
+}
+
+// Show register form
+function showRegisterForm(e) {
+    e.preventDefault();
+    loginFormContainer.style.display = 'none';
+    registerFormContainer.style.display = 'block';
+}
+
+// Reset register form
+function resetRegisterForm() {
+    registerForm.reset();
+    profileImageData = null;
+    profilePlaceholder.style.display = 'flex';
+    profileImage.style.display = 'none';
+}
+
+// Handle profile image upload
+function handleProfileImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showNotification('Please select an image file', true);
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        profileImageData = e.target.result;
+        profilePlaceholder.style.display = 'none';
+        profileImage.src = profileImageData;
+        profileImage.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+// Handle login
+function handleLogin(e) {
+    e.preventDefault();
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!username || !password) {
+        showNotification('Please enter both username and password', true);
+        return;
+    }
+
+    const user = users.find(u => u.username === username && u.password === password);
+
+    if (user) {
+        currentUser = user;
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        showApp();
+        showNotification(`Welcome back, ${username}!`);
+
+        // Send login notification email (simulated)
+        sendLoginEmail(user.email, user.username);
+    } else {
+        showNotification('Invalid username or password', true);
+    }
+}
+
+// Handle registration
+function handleRegister(e) {
+    e.preventDefault();
+    const username = regUsernameInput.value.trim();
+    const email = regEmailInput.value.trim();
+    const password = regPasswordInput.value;
+    const confirmPassword = regConfirmPasswordInput.value;
+
+    if (!username || !email || !password) {
+        showNotification('Please fill in all fields', true);
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showNotification('Passwords do not match', true);
+        return;
+    }
+
+    if (users.find(u => u.username === username)) {
+        showNotification('Username already exists', true);
+        return;
+    }
+
+    if (users.find(u => u.email === email)) {
+        showNotification('Email already registered', true);
+        return;
+    }
+
+    const newUser = {
+        id: Date.now(),
+        username: username,
+        email: email,
+        password: password,
+        profileImage: profileImageData
+    };
+
+    users.push(newUser);
+    localStorage.setItem('notesUsers', JSON.stringify(users));
+
+    currentUser = newUser;
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    showApp();
+    showNotification(`Account created successfully! Welcome, ${username}!`);
+
+    // Send registration notification email (simulated)
+    sendRegistrationEmail(email, username);
+}
+
+// Send login email (simulated)
+function sendLoginEmail(email, username) {
+    // In a real application, this would send an actual email
+    console.log(`Login notification sent to: ${email}`);
+    console.log(`User: ${username} logged in at ${new Date().toLocaleString()}`);
+
+    // For demo purposes, we'll show a notification
+    showNotification(`Login notification sent to ${email}`);
+}
+
+// Send registration email (simulated)
+function sendRegistrationEmail(email, username) {
+    // In a real application, this would send an actual email
+    console.log(`Registration notification sent to: ${email}`);
+    console.log(`New user registered: ${username} at ${new Date().toLocaleString()}`);
+
+    // For demo purposes, we'll show a notification
+    showNotification(`Registration confirmation sent to ${email}`);
+}
+
+// Handle logout
+function handleLogout() {
+    currentUser = null;
+    localStorage.removeItem('currentUser');
+    showLogin();
+    showNotification('You have been logged out');
+}
+
+// Handle contact form submission
+function handleContactForm(e) {
+    e.preventDefault();
+
+    const name = document.getElementById('contactName').value;
+    const email = document.getElementById('contactEmail').value;
+    const subject = document.getElementById('contactSubject').value;
+    const message = document.getElementById('contactMessage').value;
+
+    // In a real application, you would send this data to a server
+    // For this demo, we'll just show a success message
+    showNotification('Thank you for your message! We will get back to you soon.');
+    contactModal.classList.remove('active');
+    contactForm.reset();
+}
+
+// Show login form
+function showLogin() {
+    loginContainer.style.display = 'flex';
+    appContainer.style.display = 'none';
+    loginFormContainer.style.display = 'block';
+    registerFormContainer.style.display = 'none';
+    usernameInput.value = '';
+    passwordInput.value = '';
+    resetRegisterForm();
+}
+
+// Show main app
+function showApp() {
+    loginContainer.style.display = 'none';
+    appContainer.style.display = 'block';
+
+    // Update user info
+    userName.textContent = currentUser.username;
+    userEmail.textContent = currentUser.email;
+
+    // Update profile image
+    if (currentUser.profileImage) {
+        headerProfilePlaceholder.style.display = 'none';
+        headerProfileImage.src = currentUser.profileImage;
+        headerProfileImage.style.display = 'block';
+    } else {
+        headerProfilePlaceholder.style.display = 'flex';
+        headerProfileImage.style.display = 'none';
+        headerProfilePlaceholder.innerHTML = `<i class="fas fa-user"></i>`;
+    }
+
+    renderFiles();
+}
+
+// Toggle between dark and light mode
+function toggleTheme() {
+    document.body.classList.toggle('dark-mode');
+    localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+}
+
+// Load theme preference from localStorage
+function loadThemePreference() {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+    }
+}
+
+// Handle file upload via input
+function handleFileUpload(e) {
+    const selectedFiles = e.target.files;
+    handleFiles(selectedFiles);
+    fileInput.value = ''; // Reset input
+}
+
+// Process uploaded files
+function handleFiles(fileList) {
+    if (fileList.length === 0) return;
+
+    progressContainer.style.display = 'block';
+    let uploadedCount = 0;
+
+    Array.from(fileList).forEach((file, index) => {
+        // Simulate upload progress
+        simulateUploadProgress(index, fileList.length, () => {
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const fileData = {
+                    id: Date.now() + index,
+                    name: file.name,
+                    type: getFileType(file.type),
+                    size: formatFileSize(file.size),
+                    content: e.target.result,
+                    uploadDate: new Date().toLocaleDateString(),
+                    uploader: currentUser.username,
+                    uploaderEmail: currentUser.email
+                };
+
+                files.push(fileData);
+                saveFilesToStorage();
+                renderFiles();
+
+                uploadedCount++;
+                if (uploadedCount === fileList.length) {
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        progressBar.style.width = '0%';
+                        progressText.textContent = 'Uploading...';
+                        showNotification(`${fileList.length} file(s) uploaded successfully!`);
+                    }, 500);
+                }
+            };
+
+            if (file.type.startsWith('text/') || file.type === 'application/pdf') {
+                reader.readAsDataURL(file);
+            } else {
+                reader.readAsDataURL(file);
+            }
+        });
+    });
+}
+
+// Simulate upload progress
+function simulateUploadProgress(currentIndex, totalFiles, callback) {
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 30;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            callback();
+        }
+
+        const overallProgress = ((currentIndex / totalFiles) * 100) + (progress / totalFiles);
+        progressBar.style.width = `${overallProgress}%`;
+        progressText.textContent = `Uploading... ${Math.round(overallProgress)}%`;
+    }, 200);
+}
+
+// Get file type category
+function getFileType(mimeType) {
+    if (mimeType.startsWith('image/')) return 'img';
+    if (mimeType === 'application/pdf') return 'pdf';
+    if (mimeType === 'text/plain') return 'txt';
+    if (mimeType.includes('document') || mimeType.includes('word')) return 'doc';
+    return 'other';
+}
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Save files to localStorage
+function saveFilesToStorage() {
+    localStorage.setItem('notesFiles', JSON.stringify(files));
+}
+
+// Render files based on current filter and search
+function renderFiles() {
+    filesGrid.innerHTML = '';
+
+    const filteredFiles = files.filter(file => {
+        const matchesSearch = file.name.toLowerCase().includes(currentSearch);
+        const matchesFilter = currentFilter === 'all' || file.type === currentFilter;
+        return matchesSearch && matchesFilter;
+    });
+
+    if (filteredFiles.length === 0) {
+        filesGrid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-file-alt"></i>
+                <h3>No files found</h3>
+                <p>${currentSearch || currentFilter !== 'all' ? 'Try adjusting your search or filter' : 'Upload your first file to get started'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filteredFiles.forEach(file => {
+        const fileCard = createFileCard(file);
+        filesGrid.appendChild(fileCard);
+    });
+}
+
+// Create file card element
+function createFileCard(file) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    card.dataset.id = file.id;
+
+    const fileIconClass = getFileIconClass(file.type);
+
+    card.innerHTML = `
+        <div class="file-header">
+            <div class="file-icon ${file.type}">
+                <i class="${fileIconClass}"></i>
+            </div>
+            <div class="file-info">
+                <div class="file-name">${file.name}</div>
+                <div class="file-meta">
+                    <span>${file.size} • ${file.uploadDate}</span>
+                    <span class="file-uploader">Uploaded by: ${file.uploader}</span>
+                </div>
+            </div>
+        </div>
+        <div class="file-actions">
+            <button class="action-btn preview-btn" data-id="${file.id}">
+                <i class="fas fa-eye"></i> Preview
+            </button>
+            <button class="action-btn download-btn" data-id="${file.id}">
+                <i class="fas fa-download"></i> Download
+            </button>
+            ${file.uploader === currentUser.username ? `
+            <button class="action-btn rename-btn" data-id="${file.id}">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="action-btn delete-btn" data-id="${file.id}">
+                <i class="fas fa-trash"></i>
+            </button>
+            ` : ''}
+        </div>
+    `;
+
+    // Add event listeners to buttons
+    const previewBtn = card.querySelector('.preview-btn');
+    const downloadBtn = card.querySelector('.download-btn');
+    const renameBtn = card.querySelector('.rename-btn');
+    const deleteBtn = card.querySelector('.delete-btn');
+
+    previewBtn.addEventListener('click', () => previewFile(file));
+    downloadBtn.addEventListener('click', () => downloadFile(file));
+
+    if (renameBtn) {
+        renameBtn.addEventListener('click', () => renameFile(file.id));
+    }
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => deleteFile(file.id));
+    }
+
+    return card;
+}
+
+// Get appropriate icon for file type
+function getFileIconClass(type) {
+    switch(type) {
+        case 'pdf': return 'fas fa-file-pdf';
+        case 'doc': return 'fas fa-file-word';
+        case 'txt': return 'fas fa-file-alt';
+        case 'img': return 'fas fa-file-image';
+        default: return 'fas fa-file';
+    }
+}
+
+// Preview file content
+function previewFile(file) {
+    previewTitle.textContent = `Preview: ${file.name}`;
+    previewBody.innerHTML = '';
+
+    if (file.type === 'img') {
+        const img = document.createElement('img');
+        img.src = file.content;
+        img.alt = file.name;
+        img.className = 'preview-image';
+        previewBody.appendChild(img);
+    } else if (file.type === 'pdf') {
+        const iframe = document.createElement('iframe');
+        iframe.src = file.content;
+        iframe.width = '100%';
+        iframe.height = '500px';
+        previewBody.appendChild(iframe);
+    } else if (file.type === 'txt') {
+        // For text files, we would need to decode the base64 content
+        // In a real app, we would use the FileReader API to read text content
+        const text = document.createElement('div');
+        text.className = 'preview-text';
+        text.textContent = 'Text preview not implemented in this demo. In a real application, this would show the text content of the file.';
+        previewBody.appendChild(text);
+    } else {
+        const message = document.createElement('div');
+        message.className = 'preview-text';
+        message.textContent = 'Preview not available for this file type.';
+        previewBody.appendChild(message);
+    }
+
+    previewModal.classList.add('active');
+}
+
+// Download file
+function downloadFile(file) {
+    const a = document.createElement('a');
+    a.href = file.content;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showNotification(`Downloaded ${file.name}`);
+}
+
+// Rename file
+function renameFile(fileId) {
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
+
+    const newName = prompt('Enter new file name:', file.name);
+    if (newName && newName.trim() !== '') {
+        file.name = newName.trim();
+        saveFilesToStorage();
+        renderFiles();
+        showNotification('File renamed successfully');
+    }
+}
+
+// Delete file
+function deleteFile(fileId) {
+    if (confirm('Are you sure you want to delete this file?')) {
+        files = files.filter(f => f.id !== fileId);
+        saveFilesToStorage();
+        renderFiles();
+        showNotification('File deleted successfully');
+    }
+}
+
+// Show notification
+function showNotification(message, isError = false) {
+    notificationText.textContent = message;
+    notification.classList.remove('error');
+
+    if (isError) {
+        notification.classList.add('error');
+        notification.querySelector('i').className = 'fas fa-exclamation-circle';
+    } else {
+        notification.querySelector('i').className = 'fas fa-check-circle';
+    }
+
+    notification.classList.add('show');
+
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
+}
+
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', init);
