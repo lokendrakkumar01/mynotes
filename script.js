@@ -440,6 +440,7 @@ function getFileType(mimeType) {
     if (mimeType === 'application/pdf') return 'pdf';
     if (mimeType === 'text/plain') return 'txt';
     if (mimeType.includes('document') || mimeType.includes('word')) return 'doc';
+    if (mimeType.startsWith('video/')) return 'video';
     return 'other';
 }
 
@@ -512,9 +513,9 @@ function createFileCard(file) {
             <button class="action-btn download-btn" data-id="${file.id}">
                 <i class="fas fa-download"></i> Download
             </button>
-            <button class="action-btn share-btn" data-id="${file.id}">
+            ${file.type === 'pdf' ? `<button class="action-btn share-btn" data-id="${file.id}">
                 <i class="fas fa-share"></i> Share
-            </button>
+            </button>` : ''}
             ${file.uploader === currentUser.username ? `
             <button class="action-btn rename-btn" data-id="${file.id}">
                 <i class="fas fa-edit"></i>
@@ -529,11 +530,16 @@ function createFileCard(file) {
     // Add event listeners to buttons
     const previewBtn = card.querySelector('.preview-btn');
     const downloadBtn = card.querySelector('.download-btn');
+    const shareBtn = card.querySelector('.share-btn');
     const renameBtn = card.querySelector('.rename-btn');
     const deleteBtn = card.querySelector('.delete-btn');
 
     previewBtn.addEventListener('click', () => previewFile(file));
     downloadBtn.addEventListener('click', () => downloadFile(file));
+
+    if (shareBtn) {
+        shareBtn.addEventListener('click', () => shareFile(file));
+    }
 
     if (renameBtn) {
         renameBtn.addEventListener('click', () => renameFile(file.id));
@@ -553,6 +559,7 @@ function getFileIconClass(type) {
         case 'doc': return 'fas fa-file-word';
         case 'txt': return 'fas fa-file-alt';
         case 'img': return 'fas fa-file-image';
+        case 'video': return 'fas fa-file-video';
         default: return 'fas fa-file';
     }
 }

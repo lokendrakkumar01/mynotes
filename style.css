@@ -497,7 +497,8 @@ header {
 .doc { background: #4299e1; }
 .txt { background: #48bb78; }
 .img { background: #ed8936; }
-.other { background: #9f7aea; }
+.video { background: #9f7aea; }
+.other { background: #a855f7; }
 
 .file-info {
     flex: 1;
