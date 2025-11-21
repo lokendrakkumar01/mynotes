@@ -773,9 +773,9 @@
                         <i class="fas fa-download"></i> Download
                     </button>
                     ${file.uploader === currentUser.username ? `
-                    ${file.type === 'txt' ? `<button class="action-btn edit-btn" data-id="${file.id}" title="Edit file" aria-label="Edit file">
+                    <button class="action-btn edit-btn" data-id="${file.id}" title="Edit file" aria-label="Edit file" ${file.type !== 'txt' ? 'disabled' : ''}>
                         <i class="fas fa-pencil-alt"></i>
-                    </button>` : ''}
+                    </button>
                     <button class="action-btn rename-btn" data-id="${file.id}" title="Rename file" aria-label="Rename file">
                         <i class="fas fa-edit"></i>
                     </button>

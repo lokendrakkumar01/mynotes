@@ -827,27 +827,17 @@ header {
     .search-filter-section {
         flex-direction: column;
     }
-    
+
     .search-box {
         min-width: 100%;
     }
-    
-    .file-actions {
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    
-    .action-btn {
-        flex: 1;
-        justify-content: center;
-    }
-    
+
     header {
         flex-direction: column;
         gap: 15px;
         align-items: flex-start;
     }
-    
+
     .user-info {
         width: 100%;
         justify-content: space-between;
