@@ -512,6 +512,9 @@ function createFileCard(file) {
             <button class="action-btn download-btn" data-id="${file.id}">
                 <i class="fas fa-download"></i> Download
             </button>
+            <button class="action-btn share-btn" data-id="${file.id}">
+                <i class="fas fa-share"></i> Share
+            </button>
             ${file.uploader === currentUser.username ? `
             <button class="action-btn rename-btn" data-id="${file.id}">
                 <i class="fas fa-edit"></i>
@@ -611,6 +614,35 @@ function renameFile(fileId) {
         renderFiles();
         showNotification('File renamed successfully');
     }
+}
+
+// Share file
+function shareFile(file) {
+    const shareUrl = window.location.origin + '/share?file=' + encodeURIComponent(file.id);
+
+    if (navigator.share) {
+        navigator.share({
+            title: file.name,
+            text: `Check out this file: ${file.name}`,
+            url: shareUrl
+        }).then(() => {
+            showNotification('File shared successfully');
+        }).catch((error) => {
+            console.log('Error sharing:', error);
+            fallbackShare(shareUrl);
+        });
+    } else {
+        fallbackShare(shareUrl);
+    }
+}
+
+// Fallback share method
+function fallbackShare(shareUrl) {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+        showNotification('Share link copied to clipboard');
+    }).catch(() => {
+        showNotification('Share link: ' + shareUrl);
+    });
 }
 
 // Delete file

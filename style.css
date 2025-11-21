@@ -580,6 +580,15 @@ header {
     background: rgba(237, 137, 54, 0.2);
 }
 
+.share-btn {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.share-btn:hover {
+    background: rgba(16, 185, 129, 0.2);
+}
+
 .preview-modal {
     position: fixed;
     top: 0;
