@@ -923,3 +923,20 @@ header {
 .edit-content-btn:hover {
     background: rgba(255, 193, 7, 0.2);
 }
+
+/* Inline styles moved from index.html */
+.register-form {
+    display: none;
+}
+
+#profileImage {
+    display: none;
+}
+
+#fileInput {
+    display: none;
+}
+
+#headerProfileImage {
+    display: none;
+}
