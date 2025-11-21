@@ -39,7 +39,7 @@
                     <div class="profile-placeholder" id="profilePlaceholder">
                         <i class="fas fa-user"></i>
                     </div>
-                    <img id="profileImage" style="display: none;">
+                    <img id="profileImage" style="display: none;" alt="Profile image" title="Profile image">
                 </div>
                 <input type="file" id="profileImageInput" accept="image/*" style="display: none;">
                 <button type="button" class="profile-upload-btn" id="profileUploadBtn">
@@ -87,7 +87,7 @@
                         <div class="profile-placeholder" id="headerProfilePlaceholder">
                             <i class="fas fa-user"></i>
                         </div>
-                        <img id="headerProfileImage">
+                        <img id="headerProfileImage" alt="User profile image" title="User profile image">
                     </div>
                     <div class="user-details">
                         <div class="user-name" id="userName">User</div>
@@ -734,7 +734,6 @@
                     <button class="action-btn download-btn" data-id="${file.id}" title="Download file" aria-label="Download file">
                         <i class="fas fa-download"></i> Download
                     </button>
-                    ${file.uploader === currentUser.username ? `
                     <button class="action-btn rename-btn" data-id="${file.id}" title="Rename file" aria-label="Rename file">
                         <i class="fas fa-edit"></i> Rename
                     </button>
@@ -744,7 +743,6 @@
                     <button class="action-btn delete-btn" data-id="${file.id}" title="Delete file" aria-label="Delete file">
                         <i class="fas fa-trash"></i> Delete
                     </button>
-                    ` : ''}
                 </div>
             `;
             
@@ -891,11 +889,21 @@
             showNotification(`Downloaded ${file.name}`);
         }
 
+        // Save edited content
+        function saveEditedContent(file, newContent) {
+            const encodedContent = btoa(newContent);
+            file.content = `data:text/plain;base64,${encodedContent}`;
+            saveFilesToStorage();
+            renderFiles();
+            showNotification('File content updated successfully');
+            previewModal.classList.remove('active');
+        }
+
         // Rename file
         function renameFile(fileId) {
             const file = files.find(f => f.id === fileId);
             if (!file) return;
-            
+
             const newName = prompt('Enter new file name:', file.name);
             if (newName && newName.trim() !== '') {
                 file.name = newName.trim();
@@ -904,8 +912,6 @@
                 showNotification('File renamed successfully');
             }
         }
-
-
 
         // Delete file
         function deleteFile(fileId) {
