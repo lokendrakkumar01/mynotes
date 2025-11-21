@@ -240,7 +240,7 @@ async function handleLogin(e) {
 }
 
 // Handle registration
-function handleRegister(e) {
+async function handleRegister(e) {
     e.preventDefault();
     const username = regUsernameInput.value.trim();
     const email = regEmailInput.value.trim();
@@ -257,34 +257,37 @@ function handleRegister(e) {
         return;
     }
 
-    if (users.find(u => u.username === username)) {
-        showNotification('Username already exists', true);
-        return;
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username,
+                email,
+                password,
+                profileImage: profileImageData
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            loadUserFiles();
+            showApp();
+            showNotification(`Account created successfully! Welcome, ${username}!`);
+        } else {
+            showNotification(data.message || 'Registration failed', true);
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        showNotification('Network error. Please try again.', true);
     }
-
-    if (users.find(u => u.email === email)) {
-        showNotification('Email already registered', true);
-        return;
-    }
-
-    const newUser = {
-        id: Date.now(),
-        username: username,
-        email: email,
-        password: password,
-        profileImage: profileImageData
-    };
-
-    users.push(newUser);
-    localStorage.setItem('notesUsers', JSON.stringify(users));
-
-    currentUser = newUser;
-    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    showApp();
-    showNotification(`Account created successfully! Welcome, ${username}!`);
-
-    // Send registration notification email (simulated)
-    sendRegistrationEmail(email, username);
 }
 
 // Send login email (simulated)
