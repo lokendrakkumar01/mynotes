@@ -46,11 +46,15 @@ const notificationText = document.getElementById('notificationText');
 
 // State variables
 let currentUser = null;
-let users = JSON.parse(localStorage.getItem('notesUsers')) || [];
-let files = JSON.parse(localStorage.getItem('notesFiles')) || [];
+let users = [];
+let files = [];
 let currentFilter = 'all';
 let currentSearch = '';
 let profileImageData = null;
+let authToken = localStorage.getItem('authToken') || null;
+
+// API base URL
+const API_BASE_URL = 'http://localhost:3000/api';
 
 // Initialize the app
 function init() {
@@ -197,7 +201,7 @@ function handleProfileImageUpload(e) {
 }
 
 // Handle login
-function handleLogin(e) {
+async function handleLogin(e) {
     e.preventDefault();
     const username = usernameInput.value.trim();
     const password = passwordInput.value;
@@ -207,18 +211,31 @@ function handleLogin(e) {
         return;
     }
 
-    const user = users.find(u => u.username === username && u.password === password);
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
 
-    if (user) {
-        currentUser = user;
-        localStorage.setItem('currentUser', JSON.stringify(currentUser));
-        showApp();
-        showNotification(`Welcome back, ${username}!`);
+        const data = await response.json();
 
-        // Send login notification email (simulated)
-        sendLoginEmail(user.email, user.username);
-    } else {
-        showNotification('Invalid username or password', true);
+        if (response.ok) {
+            authToken = data.token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            loadUserFiles();
+            showApp();
+            showNotification(`Welcome back, ${username}!`);
+        } else {
+            showNotification(data.message || 'Login failed', true);
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        showNotification('Network error. Please try again.', true);
     }
 }
 
@@ -293,7 +310,10 @@ function sendRegistrationEmail(email, username) {
 // Handle logout
 function handleLogout() {
     currentUser = null;
+    authToken = null;
+    files = [];
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('authToken');
     showLogin();
     showNotification('You have been logged out');
 }
@@ -370,69 +390,62 @@ function handleFileUpload(e) {
 }
 
 // Process uploaded files
-function handleFiles(fileList) {
+async function handleFiles(fileList) {
     if (fileList.length === 0) return;
 
     progressContainer.style.display = 'block';
     let uploadedCount = 0;
 
-    Array.from(fileList).forEach((file, index) => {
-        // Simulate upload progress
-        simulateUploadProgress(index, fileList.length, () => {
-            const reader = new FileReader();
+    for (const file of fileList) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
 
-            reader.onload = function(e) {
+            const response = await fetch(`${API_BASE_URL}/files/upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
                 const fileData = {
-                    id: Date.now() + index,
-                    name: file.name,
-                    type: getFileType(file),
-                    size: formatFileSize(file.size),
-                    content: e.target.result,
-                    uploadDate: new Date().toLocaleDateString(),
-                    uploader: currentUser.username,
-                    uploaderEmail: currentUser.email
+                    id: data.file._id,
+                    name: data.file.name,
+                    type: data.file.type,
+                    size: formatFileSize(data.file.size),
+                    content: `${API_BASE_URL}/files/${data.file._id}/download`,
+                    uploadDate: new Date(data.file.uploadDate).toLocaleDateString(),
+                    uploader: data.file.uploader,
+                    uploaderEmail: data.file.uploaderEmail
                 };
 
                 files.push(fileData);
-                saveFilesToStorage();
                 renderFiles();
-
                 uploadedCount++;
-                if (uploadedCount === fileList.length) {
-                    setTimeout(() => {
-                        progressContainer.style.display = 'none';
-                        progressBar.style.width = '0%';
-                        progressText.textContent = 'Uploading...';
-                        showNotification(`${fileList.length} file(s) uploaded successfully!`);
-                    }, 500);
-                }
-            };
-
-            if (file.type.startsWith('text/') || file.type === 'application/pdf') {
-                reader.readAsDataURL(file);
             } else {
-                reader.readAsDataURL(file);
+                console.error('Upload failed for', file.name);
+                showNotification(`Failed to upload ${file.name}`, true);
             }
-        });
-    });
-}
-
-// Simulate upload progress
-function simulateUploadProgress(currentIndex, totalFiles, callback) {
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += Math.random() * 30;
-        if (progress >= 100) {
-            progress = 100;
-            clearInterval(interval);
-            callback();
+        } catch (error) {
+            console.error('Upload error:', error);
+            showNotification(`Failed to upload ${file.name}`, true);
         }
+    }
 
-        const overallProgress = ((currentIndex / totalFiles) * 100) + (progress / totalFiles);
-        progressBar.style.width = `${overallProgress}%`;
-        progressText.textContent = `Uploading... ${Math.round(overallProgress)}%`;
-    }, 200);
+    setTimeout(() => {
+        progressContainer.style.display = 'none';
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Uploading...';
+        if (uploadedCount > 0) {
+            showNotification(`${uploadedCount} file(s) uploaded successfully!`);
+        }
+    }, 500);
 }
+
+
 
 // Get file type category
 function getFileType(file) {
@@ -620,16 +633,34 @@ function downloadFile(file) {
 }
 
 // Rename file
-function renameFile(fileId) {
+async function renameFile(fileId) {
     const file = files.find(f => f.id === fileId);
     if (!file) return;
 
     const newName = prompt('Enter new file name:', file.name);
-    if (newName && newName.trim() !== '') {
-        file.name = newName.trim();
-        saveFilesToStorage();
-        renderFiles();
-        showNotification('File renamed successfully');
+    if (newName && newName.trim() !== '' && newName.trim() !== file.name) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/files/${fileId}/rename`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ newName: newName.trim() })
+            });
+
+            if (response.ok) {
+                file.name = newName.trim();
+                renderFiles();
+                showNotification('File renamed successfully');
+            } else {
+                const error = await response.json();
+                showNotification(error.message || 'Failed to rename file', true);
+            }
+        } catch (error) {
+            console.error('Rename error:', error);
+            showNotification('Failed to rename file', true);
+        }
     }
 }
 
@@ -663,12 +694,28 @@ function fallbackShare(shareUrl) {
 }
 
 // Delete file
-function deleteFile(fileId) {
+async function deleteFile(fileId) {
     if (confirm('Are you sure you want to delete this file?')) {
-        files = files.filter(f => f.id !== fileId);
-        saveFilesToStorage();
-        renderFiles();
-        showNotification('File deleted successfully');
+        try {
+            const response = await fetch(`${API_BASE_URL}/files/${fileId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            if (response.ok) {
+                files = files.filter(f => f.id !== fileId);
+                renderFiles();
+                showNotification('File deleted successfully');
+            } else {
+                const error = await response.json();
+                showNotification(error.message || 'Failed to delete file', true);
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            showNotification('Failed to delete file', true);
+        }
     }
 }
 
@@ -689,6 +736,38 @@ function showNotification(message, isError = false) {
     setTimeout(() => {
         notification.classList.remove('show');
     }, 3000);
+}
+
+// Load user files from server
+async function loadUserFiles() {
+    if (!authToken) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/files`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            files = data.files.map(file => ({
+                id: file._id,
+                name: file.name,
+                type: file.type,
+                size: formatFileSize(file.size),
+                content: `${API_BASE_URL}/files/${file._id}/download`,
+                uploadDate: new Date(file.uploadDate).toLocaleDateString(),
+                uploader: file.uploader,
+                uploaderEmail: file.uploaderEmail
+            }));
+            renderFiles();
+        } else {
+            console.error('Failed to load files');
+        }
+    } catch (error) {
+        console.error('Error loading files:', error);
+    }
 }
 
 // Initialize the app when DOM is loaded

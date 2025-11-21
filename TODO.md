@@ -1,21 +1,32 @@
-# TODO List for Notes Manager Fixes
+# TODO List for Notes Manager Backend Integration
 
-## 1. Fix Edit and Delete Button Visibility on Desktop
-- [x] Hide rename button on desktop by adding `display: none;` to `.rename-btn` in style.css
+## Backend Setup
+- [x] Create package.json with required dependencies
+- [x] Create .env file with MongoDB connection string and password
+- [x] Install npm packages
+- [x] Create server.js with MongoDB connection and API endpoints
+- [x] Set up user authentication (register/login)
+- [x] Set up file upload functionality
+- [x] Create API endpoints for CRUD operations on files
 
-## 2. Add Share Option for PDFs Only
-- [x] Modify `createFileCard()` in script.js to show share button only for PDF files
-- [x] Add event listener for share button in script.js
+## Frontend Integration
+- [ ] Update script.js to use API calls instead of localStorage
+- [ ] Modify authentication functions to use backend API
+- [ ] Update file upload to send files to server
+- [ ] Update file management functions (delete, rename, etc.)
+- [ ] Add error handling for API calls
+- [ ] Update file preview to fetch from server
 
-## 3. Add Video Upload Support
-- [x] Add "Videos" filter button in index.html
-- [x] Add video file icon styling in style.css (purple background)
-- [x] Update `getFileType()` in script.js to detect video files
-- [x] Update `getFileIconClass()` in script.js to include video icon
-- [x] Update `previewFile()` in script.js to handle video previews
-- [x] Ensure video files are accepted in file input (update accept attribute if needed)
+## Database Operations
+- [ ] Ensure all user registration data is stored in MongoDB
+- [ ] Ensure all login activities are logged in MongoDB
+- [ ] Ensure all file uploads are stored in MongoDB
+- [ ] Create endpoints to retrieve all documents from database
+- [ ] Add user activity tracking
 
-## 4. Testing
-- [ ] Test layout on desktop for button visibility
-- [ ] Test PDF sharing functionality
-- [ ] Test video upload and preview
+## Testing
+- [ ] Test user registration and login with MongoDB
+- [ ] Test file upload and storage in MongoDB
+- [ ] Test file retrieval and display
+- [ ] Test file operations (delete, rename)
+- [ ] Verify all data is properly stored in database
