@@ -429,7 +429,8 @@ async function handleFiles(fileList) {
                 renderFiles();
                 uploadedCount++;
             } else {
-                console.error('Upload failed for', file.name);
+                const errorData = await response.json();
+                console.error('Upload failed for', file.name, errorData);
                 showNotification(`Failed to upload ${file.name}`, true);
             }
         } catch (error) {
