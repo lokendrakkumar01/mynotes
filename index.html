@@ -656,6 +656,7 @@
             if (mimeType === 'application/pdf') return 'pdf';
             if (mimeType === 'text/plain') return 'txt';
             if (mimeType.includes('document') || mimeType.includes('word')) return 'doc';
+            if (mimeType.startsWith('video/')) return 'video';
             return 'other';
         }
 

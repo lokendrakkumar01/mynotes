@@ -513,9 +513,9 @@ function createFileCard(file) {
             <button class="action-btn download-btn" data-id="${file.id}">
                 <i class="fas fa-download"></i> Download
             </button>
-            ${file.type === 'pdf' ? `<button class="action-btn share-btn" data-id="${file.id}">
+            <button class="action-btn share-btn" data-id="${file.id}">
                 <i class="fas fa-share"></i> Share
-            </button>` : ''}
+            </button>
             ${file.uploader === currentUser.username ? `
             <button class="action-btn rename-btn" data-id="${file.id}">
                 <i class="fas fa-edit"></i>
