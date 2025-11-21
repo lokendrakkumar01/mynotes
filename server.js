@@ -325,7 +325,7 @@ app.post('/api/files/upload', authenticateToken, upload.single('file'), async (r
 
   } catch (error) {
     console.error('File upload error:', error);
-    res.status(500).json({ message: 'failed' });
+    res.status(500).json({ message: `Failed to upload ${req.file ? req.file.originalname : 'file'}` });
   }
 });
 
