@@ -587,6 +587,7 @@ function previewFile(file) {
         video.controls = true;
         video.width = '100%';
         video.height = '400';
+        video.className = 'preview-video';
         previewBody.appendChild(video);
     } else if (file.type === 'txt') {
         // For text files, we would need to decode the base64 content

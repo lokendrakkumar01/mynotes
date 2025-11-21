@@ -655,6 +655,14 @@ header {
     margin: 0 auto;
 }
 
+.preview-video {
+    max-width: 100%;
+    display: block;
+    margin: 0 auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .preview-text {
     white-space: pre-wrap;
     font-family: monospace;
