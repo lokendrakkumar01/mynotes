@@ -748,23 +748,21 @@
             // Add event listeners to buttons
             const previewBtn = card.querySelector('.preview-btn');
             const downloadBtn = card.querySelector('.download-btn');
-            const editBtn = card.querySelector('.edit-btn');
-            const renameBtn = card.querySelector('.rename-btn');
-            const deleteBtn = card.querySelector('.delete-btn');
 
             previewBtn.addEventListener('click', () => previewFile(file));
             downloadBtn.addEventListener('click', () => downloadFile(file));
 
-            if (editBtn) {
-                editBtn.addEventListener('click', () => editFile(file.id));
-            }
+            if (file.uploader === currentUser.username) {
+                const renameBtn = card.querySelector('.rename-btn');
+                const deleteBtn = card.querySelector('.delete-btn');
 
-            if (renameBtn) {
-                renameBtn.addEventListener('click', () => renameFile(file.id));
-            }
+                if (renameBtn) {
+                    renameBtn.addEventListener('click', () => renameFile(file.id));
+                }
 
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => deleteFile(file.id));
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', () => deleteFile(file.id));
+                }
             }
             
             return card;
