@@ -157,6 +157,23 @@
                 </div>
             </div>
 
+            <!-- Edit Modal -->
+            <div class="edit-modal" id="editModal">
+                <div class="edit-content">
+                    <button class="close-edit" id="closeEdit" aria-label="Close edit" title="Close edit">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h3 id="editTitle">Edit File</h3>
+                    <div class="edit-body" id="editBody">
+                        <textarea id="editTextarea" placeholder="Enter file content here..."></textarea>
+                    </div>
+                    <div class="edit-actions">
+                        <button class="btn btn-secondary" id="cancelEdit">Cancel</button>
+                        <button class="btn btn-primary" id="saveEdit">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Contact Modal -->
             <div class="contact-modal" id="contactModal">
                 <div class="contact-content">
@@ -253,6 +270,13 @@
         const closePreview = document.getElementById('closePreview');
         const previewTitle = document.getElementById('previewTitle');
         const previewBody = document.getElementById('previewBody');
+        const editModal = document.getElementById('editModal');
+        const closeEdit = document.getElementById('closeEdit');
+        const editTitle = document.getElementById('editTitle');
+        const editBody = document.getElementById('editBody');
+        const editTextarea = document.getElementById('editTextarea');
+        const cancelEdit = document.getElementById('cancelEdit');
+        const saveEdit = document.getElementById('saveEdit');
         const contactModal = document.getElementById('contactModal');
         const closeContact = document.getElementById('closeContact');
         const contactForm = document.getElementById('contactForm');
@@ -354,14 +378,31 @@
             closePreview.addEventListener('click', () => {
                 previewModal.classList.remove('active');
             });
-            
+
+            // Edit modal
+            closeEdit.addEventListener('click', () => {
+                editModal.classList.remove('active');
+            });
+
+            cancelEdit.addEventListener('click', () => {
+                editModal.classList.remove('active');
+            });
+
+            saveEdit.addEventListener('click', handleSaveEdit);
+
             // Close modal when clicking outside
             previewModal.addEventListener('click', (e) => {
                 if (e.target === previewModal) {
                     previewModal.classList.remove('active');
                 }
             });
-            
+
+            editModal.addEventListener('click', (e) => {
+                if (e.target === editModal) {
+                    editModal.classList.remove('active');
+                }
+            });
+
             contactModal.addEventListener('click', (e) => {
                 if (e.target === contactModal) {
                     contactModal.classList.remove('active');
@@ -732,6 +773,9 @@
                         <i class="fas fa-download"></i> Download
                     </button>
                     ${file.uploader === currentUser.username ? `
+                    ${file.type === 'txt' ? `<button class="action-btn edit-btn" data-id="${file.id}" title="Edit file" aria-label="Edit file">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>` : ''}
                     <button class="action-btn rename-btn" data-id="${file.id}" title="Rename file" aria-label="Rename file">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -745,16 +789,21 @@
             // Add event listeners to buttons
             const previewBtn = card.querySelector('.preview-btn');
             const downloadBtn = card.querySelector('.download-btn');
+            const editBtn = card.querySelector('.edit-btn');
             const renameBtn = card.querySelector('.rename-btn');
             const deleteBtn = card.querySelector('.delete-btn');
-            
+
             previewBtn.addEventListener('click', () => previewFile(file));
             downloadBtn.addEventListener('click', () => downloadFile(file));
-            
+
+            if (editBtn) {
+                editBtn.addEventListener('click', () => editFile(file.id));
+            }
+
             if (renameBtn) {
                 renameBtn.addEventListener('click', () => renameFile(file.id));
             }
-            
+
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', () => deleteFile(file.id));
             }
@@ -769,6 +818,7 @@
                 case 'doc': return 'fas fa-file-word';
                 case 'txt': return 'fas fa-file-alt';
                 case 'img': return 'fas fa-file-image';
+                case 'video': return 'fas fa-file-video';
                 default: return 'fas fa-file';
             }
         }
@@ -799,12 +849,20 @@
                 iframe.height = '500px';
                 previewBody.appendChild(iframe);
             } else if (file.type === 'txt') {
-                // For text files, we would need to decode the base64 content
-                // In a real app, we would use the FileReader API to read text content
-                const text = document.createElement('div');
-                text.className = 'preview-text';
-                text.textContent = 'Text preview not implemented in this demo. In a real application, this would show the text content of the file.';
-                previewBody.appendChild(text);
+                // Decode base64 content for text files
+                try {
+                    const base64Content = file.content.split(',')[1]; // Remove data:text/plain;base64, prefix
+                    const decodedContent = atob(base64Content);
+                    const text = document.createElement('pre');
+                    text.className = 'preview-text';
+                    text.textContent = decodedContent;
+                    previewBody.appendChild(text);
+                } catch (error) {
+                    const text = document.createElement('div');
+                    text.className = 'preview-text';
+                    text.textContent = 'Error loading text content';
+                    previewBody.appendChild(text);
+                }
             } else {
                 const message = document.createElement('div');
                 message.className = 'preview-text';
@@ -837,6 +895,49 @@
                 saveFilesToStorage();
                 renderFiles();
                 showNotification('File renamed successfully');
+            }
+        }
+
+        // Edit file
+        function editFile(fileId) {
+            const file = files.find(f => f.id === fileId);
+            if (!file || file.type !== 'txt') return;
+
+            editTitle.textContent = `Edit: ${file.name}`;
+
+            // Decode base64 content for text files
+            try {
+                const base64Content = file.content.split(',')[1]; // Remove data:text/plain;base64, prefix
+                const decodedContent = atob(base64Content);
+                editTextarea.value = decodedContent;
+            } catch (error) {
+                editTextarea.value = 'Error loading file content';
+            }
+
+            editModal.classList.add('active');
+            editModal.dataset.fileId = fileId; // Store file ID for saving
+        }
+
+        // Handle save edit
+        function handleSaveEdit() {
+            const fileId = editModal.dataset.fileId;
+            const newContent = editTextarea.value;
+
+            if (!fileId) return;
+
+            const file = files.find(f => f.id == fileId);
+            if (!file) return;
+
+            // Encode new content to base64
+            try {
+                const base64Content = btoa(newContent);
+                file.content = `data:text/plain;base64,${base64Content}`;
+                saveFilesToStorage();
+                renderFiles();
+                showNotification('File updated successfully');
+                editModal.classList.remove('active');
+            } catch (error) {
+                showNotification('Error saving file', true);
             }
         }
 
