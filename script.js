@@ -519,11 +519,11 @@ function createFileCard(file) {
                 <i class="fas fa-share"></i> Share
             </button>
             ${file.uploader === currentUser.username ? `
-            <button class="action-btn rename-btn" data-id="${file.id}">
-                <i class="fas fa-edit"></i>
+            <button class="action-btn rename-btn" data-id="${file.id}" title="Rename file" aria-label="Rename file">
+                <i class="fas fa-edit"></i> Rename
             </button>
-            <button class="action-btn delete-btn" data-id="${file.id}">
-                <i class="fas fa-trash"></i>
+            <button class="action-btn delete-btn" data-id="${file.id}" title="Delete file" aria-label="Delete file">
+                <i class="fas fa-trash"></i> Delete
             </button>
             ` : ''}
         </div>

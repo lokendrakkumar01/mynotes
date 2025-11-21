@@ -575,7 +575,9 @@ header {
 .rename-btn {
     background: rgba(237, 137, 54, 0.1);
     color: #ed8936;
-    display: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
 .rename-btn:hover {
