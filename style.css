@@ -565,6 +565,7 @@ header {
 .delete-btn {
     background: rgba(245, 101, 101, 0.1);
     color: #f56565;
+    display: none;
 }
 
 .delete-btn:hover {
