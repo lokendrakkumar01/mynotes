@@ -738,6 +738,9 @@
                     <button class="action-btn rename-btn" data-id="${file.id}" title="Rename file" aria-label="Rename file">
                         <i class="fas fa-edit"></i> Rename
                     </button>
+                    ${file.type === 'txt' ? `<button class="action-btn edit-content-btn" data-id="${file.id}" title="Edit content" aria-label="Edit content">
+                        <i class="fas fa-pencil-alt"></i> Edit Content
+                    </button>` : ''}
                     <button class="action-btn delete-btn" data-id="${file.id}" title="Delete file" aria-label="Delete file">
                         <i class="fas fa-trash"></i> Delete
                     </button>
@@ -763,6 +766,13 @@
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', () => deleteFile(file.id));
                 }
+
+                if (file.type === 'txt') {
+                    const editContentBtn = card.querySelector('.edit-content-btn');
+                    if (editContentBtn) {
+                        editContentBtn.addEventListener('click', () => previewFile(file, true));
+                    }
+                }
             }
             
             return card;
@@ -781,8 +791,8 @@
         }
 
         // Preview file content
-        function previewFile(file) {
-            previewTitle.textContent = `Preview: ${file.name}`;
+        function previewFile(file, isEditMode = false) {
+            previewTitle.textContent = `${isEditMode ? 'Edit' : 'Preview'}: ${file.name}`;
             previewBody.innerHTML = '';
 
             if (file.type === 'img') {
@@ -806,19 +816,59 @@
                 iframe.height = '500px';
                 previewBody.appendChild(iframe);
             } else if (file.type === 'txt') {
-                // Decode base64 content for text files
-                try {
-                    const base64Content = file.content.split(',')[1]; // Remove data:text/plain;base64, prefix
-                    const decodedContent = atob(base64Content);
-                    const text = document.createElement('pre');
-                    text.className = 'preview-text';
-                    text.textContent = decodedContent;
-                    previewBody.appendChild(text);
-                } catch (error) {
-                    const text = document.createElement('div');
-                    text.className = 'preview-text';
-                    text.textContent = 'Error loading text content';
-                    previewBody.appendChild(text);
+                if (isEditMode) {
+                    // Edit mode: show textarea
+                    try {
+                        const base64Content = file.content.split(',')[1]; // Remove data:text/plain;base64, prefix
+                        const decodedContent = atob(base64Content);
+                        const textarea = document.createElement('textarea');
+                        textarea.className = 'edit-textarea';
+                        textarea.value = decodedContent;
+                        textarea.placeholder = 'Enter your text content here...';
+                        previewBody.appendChild(textarea);
+
+                        // Add edit buttons
+                        const buttonContainer = document.createElement('div');
+                        buttonContainer.className = 'edit-buttons';
+                        buttonContainer.innerHTML = `
+                            <button class="btn btn-primary" id="saveEditBtn">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <button class="btn btn-danger" id="deleteFileBtn">
+                                <i class="fas fa-trash"></i> Delete File
+                            </button>
+                        `;
+                        previewBody.appendChild(buttonContainer);
+
+                        // Add event listeners
+                        document.getElementById('saveEditBtn').addEventListener('click', () => saveEditedContent(file, textarea.value));
+                        document.getElementById('deleteFileBtn').addEventListener('click', () => {
+                            if (confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+                                deleteFile(file.id);
+                                previewModal.classList.remove('active');
+                            }
+                        });
+                    } catch (error) {
+                        const text = document.createElement('div');
+                        text.className = 'preview-text';
+                        text.textContent = 'Error loading text content for editing';
+                        previewBody.appendChild(text);
+                    }
+                } else {
+                    // Preview mode: show pre
+                    try {
+                        const base64Content = file.content.split(',')[1]; // Remove data:text/plain;base64, prefix
+                        const decodedContent = atob(base64Content);
+                        const text = document.createElement('pre');
+                        text.className = 'preview-text';
+                        text.textContent = decodedContent;
+                        previewBody.appendChild(text);
+                    } catch (error) {
+                        const text = document.createElement('div');
+                        text.className = 'preview-text';
+                        text.textContent = 'Error loading text content';
+                        previewBody.appendChild(text);
+                    }
                 }
             } else {
                 const message = document.createElement('div');
