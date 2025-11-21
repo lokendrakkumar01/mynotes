@@ -157,22 +157,7 @@
                 </div>
             </div>
 
-            <!-- Edit Modal -->
-            <div class="edit-modal" id="editModal">
-                <div class="edit-content">
-                    <button class="close-edit" id="closeEdit" aria-label="Close edit" title="Close edit">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <h3 id="editTitle">Edit File</h3>
-                    <div class="edit-body" id="editBody">
-                        <textarea id="editTextarea" placeholder="Enter file content here..."></textarea>
-                    </div>
-                    <div class="edit-actions">
-                        <button class="btn btn-secondary" id="cancelEdit">Cancel</button>
-                        <button class="btn btn-primary" id="saveEdit">Save Changes</button>
-                    </div>
-                </div>
-            </div>
+
 
             <!-- Contact Modal -->
             <div class="contact-modal" id="contactModal">
@@ -270,13 +255,7 @@
         const closePreview = document.getElementById('closePreview');
         const previewTitle = document.getElementById('previewTitle');
         const previewBody = document.getElementById('previewBody');
-        const editModal = document.getElementById('editModal');
-        const closeEdit = document.getElementById('closeEdit');
-        const editTitle = document.getElementById('editTitle');
-        const editBody = document.getElementById('editBody');
-        const editTextarea = document.getElementById('editTextarea');
-        const cancelEdit = document.getElementById('cancelEdit');
-        const saveEdit = document.getElementById('saveEdit');
+
         const contactModal = document.getElementById('contactModal');
         const closeContact = document.getElementById('closeContact');
         const contactForm = document.getElementById('contactForm');
@@ -379,27 +358,10 @@
                 previewModal.classList.remove('active');
             });
 
-            // Edit modal
-            closeEdit.addEventListener('click', () => {
-                editModal.classList.remove('active');
-            });
-
-            cancelEdit.addEventListener('click', () => {
-                editModal.classList.remove('active');
-            });
-
-            saveEdit.addEventListener('click', handleSaveEdit);
-
             // Close modal when clicking outside
             previewModal.addEventListener('click', (e) => {
                 if (e.target === previewModal) {
                     previewModal.classList.remove('active');
-                }
-            });
-
-            editModal.addEventListener('click', (e) => {
-                if (e.target === editModal) {
-                    editModal.classList.remove('active');
                 }
             });
 
@@ -773,9 +735,6 @@
                         <i class="fas fa-download"></i> Download
                     </button>
                     ${file.uploader === currentUser.username ? `
-                    <button class="action-btn edit-btn" data-id="${file.id}" title="Edit file" aria-label="Edit file" ${file.type !== 'txt' ? 'disabled' : ''}>
-                        <i class="fas fa-pencil-alt"></i>
-                    </button>
                     <button class="action-btn rename-btn" data-id="${file.id}" title="Rename file" aria-label="Rename file">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -898,48 +857,7 @@
             }
         }
 
-        // Edit file
-        function editFile(fileId) {
-            const file = files.find(f => f.id === fileId);
-            if (!file || file.type !== 'txt') return;
 
-            editTitle.textContent = `Edit: ${file.name}`;
-
-            // Decode base64 content for text files
-            try {
-                const base64Content = file.content.split(',')[1]; // Remove data:text/plain;base64, prefix
-                const decodedContent = atob(base64Content);
-                editTextarea.value = decodedContent;
-            } catch (error) {
-                editTextarea.value = 'Error loading file content';
-            }
-
-            editModal.classList.add('active');
-            editModal.dataset.fileId = fileId; // Store file ID for saving
-        }
-
-        // Handle save edit
-        function handleSaveEdit() {
-            const fileId = editModal.dataset.fileId;
-            const newContent = editTextarea.value;
-
-            if (!fileId) return;
-
-            const file = files.find(f => f.id == fileId);
-            if (!file) return;
-
-            // Encode new content to base64
-            try {
-                const base64Content = btoa(newContent);
-                file.content = `data:text/plain;base64,${base64Content}`;
-                saveFilesToStorage();
-                renderFiles();
-                showNotification('File updated successfully');
-                editModal.classList.remove('active');
-            } catch (error) {
-                showNotification('Error saving file', true);
-            }
-        }
 
         // Delete file
         function deleteFile(fileId) {
