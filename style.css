@@ -566,7 +566,6 @@ header {
 .delete-btn {
     background: rgba(245, 101, 101, 0.1);
     color: #f56565;
-    display: none;
 }
 
 .delete-btn:hover {
@@ -576,6 +575,7 @@ header {
 .rename-btn {
     background: rgba(237, 137, 54, 0.1);
     color: #ed8936;
+    display: none;
 }
 
 .rename-btn:hover {

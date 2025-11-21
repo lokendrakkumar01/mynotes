@@ -581,6 +581,13 @@ function previewFile(file) {
         iframe.width = '100%';
         iframe.height = '500px';
         previewBody.appendChild(iframe);
+    } else if (file.type === 'video') {
+        const video = document.createElement('video');
+        video.src = file.content;
+        video.controls = true;
+        video.width = '100%';
+        video.height = '400';
+        previewBody.appendChild(video);
     } else if (file.type === 'txt') {
         // For text files, we would need to decode the base64 content
         // In a real app, we would use the FileReader API to read text content
