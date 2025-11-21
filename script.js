@@ -385,7 +385,7 @@ function handleFiles(fileList) {
                 const fileData = {
                     id: Date.now() + index,
                     name: file.name,
-                    type: getFileType(file.type),
+                    type: getFileType(file),
                     size: formatFileSize(file.size),
                     content: e.target.result,
                     uploadDate: new Date().toLocaleDateString(),
@@ -435,12 +435,14 @@ function simulateUploadProgress(currentIndex, totalFiles, callback) {
 }
 
 // Get file type category
-function getFileType(mimeType) {
+function getFileType(file) {
+    const mimeType = file.type;
+    const fileName = file.name.toLowerCase();
     if (mimeType.startsWith('image/')) return 'img';
     if (mimeType === 'application/pdf') return 'pdf';
     if (mimeType === 'text/plain') return 'txt';
     if (mimeType.includes('document') || mimeType.includes('word')) return 'doc';
-    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('video/') || fileName.endsWith('.mp4') || fileName.endsWith('.avi') || fileName.endsWith('.mov') || fileName.endsWith('.wmv') || fileName.endsWith('.mkv') || fileName.endsWith('.webm')) return 'video';
     return 'other';
 }
 
