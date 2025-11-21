@@ -6,6 +6,8 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const passport = require('passport');
+const GitHubStrategy = require('passport-github2').Strategy;
 require('dotenv').config();
 
 const app = express();
@@ -80,6 +82,66 @@ async function connectToMongoDB() {
     process.exit(1);
   }
 }
+
+// Passport GitHub Strategy
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  passport.use(new GitHubStrategy({
+      clientID: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      callbackURL: "http://localhost:3000/auth/github/callback"
+    },
+    async function(accessToken, refreshToken, profile, done) {
+      try {
+        // Check if user already exists
+        let user = await usersCollection.findOne({ githubId: profile.id });
+
+        if (user) {
+          // Update last login
+          await usersCollection.updateOne(
+            { _id: user._id },
+            { $set: { lastLogin: new Date() } }
+          );
+          return done(null, user);
+        }
+
+        // Create new user from GitHub profile
+        const newUser = {
+          githubId: profile.id,
+          username: profile.username || profile.displayName.replace(/\s+/g, '').toLowerCase(),
+          email: profile.emails ? profile.emails[0].value : null,
+          profileImage: profile.photos ? profile.photos[0].value : null,
+          githubProfile: profile.profileUrl,
+          createdAt: new Date(),
+          lastLogin: new Date()
+        };
+
+        const result = await usersCollection.insertOne(newUser);
+        newUser._id = result.insertedId;
+
+        return done(null, newUser);
+      } catch (error) {
+        return done(error, null);
+      }
+    }
+  ));
+} else {
+  console.log('GitHub OAuth credentials not found. GitHub login will not be available.');
+}
+
+// Serialize user for session
+passport.serializeUser(function(user, done) {
+  done(null, user._id);
+});
+
+// Deserialize user from session
+passport.deserializeUser(async function(id, done) {
+  try {
+    const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+});
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -389,6 +451,38 @@ app.get('/api/users', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+// GitHub OAuth routes
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  app.get('/auth/github',
+    passport.authenticate('github', { scope: ['user:email'] })
+  );
+
+  app.get('/auth/github/callback',
+    passport.authenticate('github', { failureRedirect: '/' }),
+    async (req, res) => {
+      try {
+        // Generate JWT token for the authenticated user
+        const token = jwt.sign(
+          { userId: req.user._id, username: req.user.username },
+          process.env.JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        // Redirect to frontend with token
+        res.redirect(`/?token=${token}&user=${encodeURIComponent(JSON.stringify({
+          id: req.user._id,
+          username: req.user.username,
+          email: req.user.email,
+          profileImage: req.user.profileImage
+        }))}`);
+      } catch (error) {
+        console.error('GitHub callback error:', error);
+        res.redirect('/');
+      }
+    }
+  );
+}
 
 // Helper function to determine file type
 function getFileType(file) {
