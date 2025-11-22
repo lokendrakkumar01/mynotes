@@ -4,6 +4,7 @@
 const firebaseConfig = {
     apiKey: "AIzaSyAwP95hF4wD4DIM7QBPEClzOlJHa2Im2nE",
     authDomain: "mynotes-8e05e.firebaseapp.com",
+    databaseURL: "https://mynotes-8e05e-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "mynotes-8e05e",
     storageBucket: "mynotes-8e05e.firebasestorage.app",
     messagingSenderId: "836423999806",
@@ -18,6 +19,10 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
+const realtimeDb = firebase.database();
 
 // Google Auth Provider
 const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+// GitHub Auth Provider
+const githubProvider = new firebase.auth.GithubAuthProvider();

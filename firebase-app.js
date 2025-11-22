@@ -17,6 +17,8 @@ const regPasswordInput = document.getElementById('regPassword');
 const regConfirmPasswordInput = document.getElementById('regConfirmPassword');
 const googleLoginBtn = document.getElementById('googleLoginBtn');
 const googleSignupBtn = document.getElementById('googleSignupBtn');
+const githubLoginBtn = document.getElementById('githubLoginBtn');
+const githubSignupBtn = document.getElementById('githubSignupBtn');
 const headerProfileImage = document.getElementById('headerProfileImage');
 const headerProfilePlaceholder = document.getElementById('headerProfilePlaceholder');
 const userName = document.getElementById('userName');
@@ -86,6 +88,8 @@ function setupEventListeners() {
     registerForm.addEventListener('submit', handleEmailRegister);
     googleLoginBtn.addEventListener('click', handleGoogleLogin);
     googleSignupBtn.addEventListener('click', handleGoogleLogin);
+    if (githubLoginBtn) githubLoginBtn.addEventListener('click', handleGithubLogin);
+    if (githubSignupBtn) githubSignupBtn.addEventListener('click', handleGithubLogin);
     registerLink.addEventListener('click', showRegisterForm);
     loginLink.addEventListener('click', showLoginForm);
     logoutBtn.addEventListener('click', handleLogout);
@@ -160,6 +164,18 @@ async function handleGoogleLogin() {
     } catch (error) {
         console.error('Google login error:', error);
         showNotification('Google login failed: ' + error.message, true);
+        updateConnectionStatus('disconnected', 'Sign in failed');
+    }
+}
+
+async function handleGithubLogin() {
+    try {
+        updateConnectionStatus('connecting', 'Signing in with GitHub...');
+        await auth.signInWithPopup(githubProvider);
+        showNotification('Welcome! Signed in with GitHub');
+    } catch (error) {
+        console.error('GitHub login error:', error);
+        showNotification('GitHub login failed: ' + error.message, true);
         updateConnectionStatus('disconnected', 'Sign in failed');
     }
 }
