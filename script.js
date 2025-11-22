@@ -63,6 +63,18 @@ console.log('API Base URL:', API_BASE_URL);
 
 // Initialize the app
 function init() {
+    // Show diagnostic info
+    console.log('=== DIAGNOSTIC INFO ===');
+    console.log('1. Current URL:', window.location.href);
+    console.log('2. Protocol:', window.location.protocol);
+    console.log('3. API will connect to:', API_BASE_URL);
+    console.log('======================');
+
+    // Warn if accessing via file://
+    if (window.location.protocol === 'file:') {
+        console.warn('⚠️ WARNING: You are opening this as a FILE. For best results, access via server (e.g., http://192.168.x.x:3000)');
+    }
+
     checkLoginStatus();
     setupEventListeners();
     loadThemePreference();
@@ -248,8 +260,23 @@ async function handleLogin(e) {
             showNotification(data.message || 'Login failed', true);
         }
     } catch (error) {
-        console.error('Login error:', error);
-        showNotification(`Login failed: ${error.message}. Check console for details.`, true);
+        console.error('=== LOGIN ERROR DETAILS ===');
+        console.error('URL attempted:', `${API_BASE_URL}/auth/login`);
+        console.error('Error type:', error.name);
+        console.error('Error message:', error.message);
+        console.error('===========================');
+
+        let errorMsg = `❌ Login failed: ${error.message}`;
+
+        if (error.message.includes('Failed to fetch')) {
+            errorMsg = '❌ Cannot reach server!\n\n';
+            errorMsg += '🔍 CHECKLIST:\n';
+            errorMsg += '1. Is server running? Run: node server.js\n';
+            errorMsg += '2. Access via http://IP:3000 (NOT file://)\n';
+            errorMsg += '3. Check console (F12) for details';
+        }
+
+        showNotification(errorMsg, true);
     }
 }
 
@@ -301,8 +328,23 @@ async function handleRegister(e) {
             showNotification(data.message || 'Registration failed', true);
         }
     } catch (error) {
-        console.error('Registration error:', error);
-        showNotification(`Registration failed: ${error.message}. Check console for details.`, true);
+        console.error('=== REGISTRATION ERROR DETAILS ===');
+        console.error('URL attempted:', `${API_BASE_URL}/auth/register`);
+        console.error('Error type:', error.name);
+        console.error('Error message:', error.message);
+        console.error('==================================');
+
+        let errorMsg = `❌ Registration failed: ${error.message}`;
+
+        if (error.message.includes('Failed to fetch')) {
+            errorMsg = '❌ Cannot reach server!\n\n';
+            errorMsg += '🔍 CHECKLIST:\n';
+            errorMsg += '1. Is server running? Run: node server.js\n';
+            errorMsg += '2. Access via http://IP:3000 (NOT file://)\n';
+            errorMsg += '3. Check console (F12) for details';
+        }
+
+        showNotification(errorMsg, true);
     }
 }
 
