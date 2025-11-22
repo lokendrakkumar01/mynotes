@@ -421,20 +421,6 @@ async function handleFiles(fileList) {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                const fileData = {
-                    id: data.file._id,
-                    name: data.file.name,
-                    type: data.file.type,
-                    size: formatFileSize(data.file.size),
-                    content: `${API_BASE_URL}/files/${data.file._id}/download`,
-                    uploadDate: new Date(data.file.uploadDate).toLocaleDateString(),
-                    uploader: data.file.uploader,
-                    uploaderEmail: data.file.uploaderEmail
-                };
-
-                files.push(fileData);
-                renderFiles();
                 uploadedCount++;
             } else {
                 const errorData = await response.json();
@@ -453,6 +439,7 @@ async function handleFiles(fileList) {
         progressText.textContent = 'Uploading...';
         if (uploadedCount > 0) {
             showNotification(`${uploadedCount} file(s) uploaded successfully!`);
+            loadUserFiles(); // Reload files from server to sync state
         }
     }, 500);
 }
@@ -596,21 +583,23 @@ function previewFile(file) {
     previewTitle.textContent = `Preview: ${file.name}`;
     previewBody.innerHTML = '';
 
+    const inlineUrl = file.content + '?inline=true';
+
     if (file.type === 'img') {
         const img = document.createElement('img');
-        img.src = file.content;
+        img.src = inlineUrl;
         img.alt = file.name;
         img.className = 'preview-image';
         previewBody.appendChild(img);
     } else if (file.type === 'pdf') {
         const iframe = document.createElement('iframe');
-        iframe.src = file.content;
+        iframe.src = inlineUrl;
         iframe.width = '100%';
         iframe.height = '500px';
         previewBody.appendChild(iframe);
     } else if (file.type === 'video') {
         const video = document.createElement('video');
-        video.src = file.content;
+        video.src = inlineUrl;
         video.controls = true;
         video.width = '100%';
         video.height = '400';
@@ -827,21 +816,41 @@ async function fetchUserProfile() {
 }
 
 // Handle GitHub login
-function handleGitHubLogin() {
-    // Open Google Form in new tab
-    window.open('https://docs.google.com/forms/d/e/1FAIpQLScg5nk-Iy90l9r5YqZncerzm2iGJmBx43lmRzm_UXusisw84w/viewform?usp=sf_link', '_blank');
-    showNotification('Google Form opened in new tab');
-    // Show main page
-    showApp();
+async function handleGitHubLogin() {
+    const name = prompt('Enter your name for GitHub login:');
+    const email = prompt('Enter your email for GitHub login:');
+
+    if (!name || !email) {
+        showNotification('Name and email are required for OAuth login', true);
+        return;
+    }
+
+    // Store the info temporarily
+    sessionStorage.setItem('oauth_name', name);
+    sessionStorage.setItem('oauth_email', email);
+    sessionStorage.setItem('oauth_provider', 'github');
+
+    // Redirect to GitHub OAuth
+    window.location.href = `${API_BASE_URL.replace('/api', '')}/auth/github`;
 }
 
 // Handle Google login
-function handleGoogleLogin() {
-    // Open Google Form in new tab
-    window.open('https://docs.google.com/forms/d/e/1FAIpQLScg5nk-Iy90l9r5YqZncerzm2iGJmBx43lmRzm_UXusisw84w/viewform?usp=sf_link', '_blank');
-    showNotification('Google Form opened in new tab');
-    // Show main page
-    showApp();
+async function handleGoogleLogin() {
+    const name = prompt('Enter your name for Google login:');
+    const email = prompt('Enter your email for Google login:');
+
+    if (!name || !email) {
+        showNotification('Name and email are required for OAuth login', true);
+        return;
+    }
+
+    // Store the info temporarily
+    sessionStorage.setItem('oauth_name', name);
+    sessionStorage.setItem('oauth_email', email);
+    sessionStorage.setItem('oauth_provider', 'google');
+
+    // Redirect to Google OAuth
+    window.location.href = `${API_BASE_URL.replace('/api', '')}/auth/google`;
 }
 
 // Initialize the app when DOM is loaded

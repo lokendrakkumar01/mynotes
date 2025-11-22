@@ -97,8 +97,31 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
       let user = data.users.find(u => u.githubId === profile.id);
 
       if (!user) {
-        // Redirect to Google Form for name submission
-        return done(null, false, { redirectUrl: 'https://forms.gle/6hndZCwoEtTsY8VU8' });
+        // Check if we have name and email from sessionStorage
+        const name = sessionStorage.getItem('oauth_name');
+        const email = sessionStorage.getItem('oauth_email');
+
+        if (!name || !email) {
+          return done(null, false, { message: 'Name and email required for OAuth registration' });
+        }
+
+        // Create new user
+        user = {
+          _id: Date.now().toString(),
+          username: name,
+          email: email,
+          githubId: profile.id,
+          profileImage: profile.photos && profile.photos[0] ? profile.photos[0].value : null,
+          createdAt: new Date()
+        };
+
+        data.users.push(user);
+        saveData();
+
+        // Clear session storage
+        sessionStorage.removeItem('oauth_name');
+        sessionStorage.removeItem('oauth_email');
+        sessionStorage.removeItem('oauth_provider');
       }
 
       return done(null, user);
@@ -119,8 +142,31 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       let user = data.users.find(u => u.googleId === profile.id);
 
       if (!user) {
-        // Redirect to Google Form for name submission
-        return done(null, false, { redirectUrl: 'https://forms.gle/6hndZCwoEtTsY8VU8' });
+        // Check if we have name and email from sessionStorage
+        const name = sessionStorage.getItem('oauth_name');
+        const email = sessionStorage.getItem('oauth_email');
+
+        if (!name || !email) {
+          return done(null, false, { message: 'Name and email required for OAuth registration' });
+        }
+
+        // Create new user
+        user = {
+          _id: Date.now().toString(),
+          username: name,
+          email: email,
+          googleId: profile.id,
+          profileImage: profile.photos && profile.photos[0] ? profile.photos[0].value : null,
+          createdAt: new Date()
+        };
+
+        data.users.push(user);
+        saveData();
+
+        // Clear session storage
+        sessionStorage.removeItem('oauth_name');
+        sessionStorage.removeItem('oauth_email');
+        sessionStorage.removeItem('oauth_provider');
       }
 
       return done(null, user);
@@ -148,7 +194,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   app.get('/auth/github', passport.authenticate('github'));
 
   app.get('/auth/github/callback',
-    passport.authenticate('github', { failureRedirect: 'https://forms.gle/6hndZCwoEtTsY8VU8' }),
+    passport.authenticate('github', { failureRedirect: `${serverURL}?error=oauth_failed` }),
     (req, res) => {
       // Successful authentication, redirect to frontend with token.
       const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
@@ -161,7 +207,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
   app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: 'https://forms.gle/6hndZCwoEtTsY8VU8' }),
+    passport.authenticate('google', { failureRedirect: `${serverURL}?error=oauth_failed` }),
     (req, res) => {
       // Successful authentication, redirect to frontend with token.
       const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
@@ -400,7 +446,11 @@ app.get('/api/files/:id/download', verifyToken, async (req, res) => {
     if (!file) {
       return res.status(404).json({ error: 'File not found' });
     }
-    res.download(file.path, file.name);
+    if (req.query.inline === 'true') {
+      res.sendFile(file.path);
+    } else {
+      res.download(file.path, file.name);
+    }
   } catch (error) {
     res.status(500).json({ error: 'Failed to download file' });
   }
