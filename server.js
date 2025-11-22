@@ -15,6 +15,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 // Middleware
 app.use(cors({
   origin: '*', // Allow all origins for cross-device access
@@ -91,17 +97,8 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
       let user = data.users.find(u => u.githubId === profile.id);
 
       if (!user) {
-        user = {
-          _id: Date.now().toString(),
-          githubId: profile.id,
-          username: profile.username,
-          email: profile.emails ? profile.emails[0].value : null,
-          name: profile.displayName,
-          avatar: profile.photos ? profile.photos[0].value : null,
-          createdAt: new Date()
-        };
-        data.users.push(user);
-        saveData();
+        // Redirect to Google Form for name submission
+        return done(null, false, { redirectUrl: 'https://forms.gle/6hndZCwoEtTsY8VU8' });
       }
 
       return done(null, user);
@@ -122,17 +119,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       let user = data.users.find(u => u.googleId === profile.id);
 
       if (!user) {
-        user = {
-          _id: Date.now().toString(),
-          googleId: profile.id,
-          username: profile.displayName.replace(/\s+/g, '').toLowerCase(),
-          email: profile.emails ? profile.emails[0].value : null,
-          name: profile.displayName,
-          avatar: profile.photos ? profile.photos[0].value : null,
-          createdAt: new Date()
-        };
-        data.users.push(user);
-        saveData();
+        // Redirect to Google Form for name submission
+        return done(null, false, { redirectUrl: 'https://forms.gle/6hndZCwoEtTsY8VU8' });
       }
 
       return done(null, user);
@@ -160,7 +148,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   app.get('/auth/github', passport.authenticate('github'));
 
   app.get('/auth/github/callback',
-    passport.authenticate('github', { failureRedirect: '/login' }),
+    passport.authenticate('github', { failureRedirect: 'https://forms.gle/6hndZCwoEtTsY8VU8' }),
     (req, res) => {
       // Successful authentication, redirect to frontend with token.
       const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
@@ -173,7 +161,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
   app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: '/login' }),
+    passport.authenticate('google', { failureRedirect: 'https://forms.gle/6hndZCwoEtTsY8VU8' }),
     (req, res) => {
       // Successful authentication, redirect to frontend with token.
       const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
