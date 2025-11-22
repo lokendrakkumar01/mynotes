@@ -16,9 +16,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: true, // Allow all origins for cross-device access
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
+}));
+app.use(express.json({ limit: '50mb' })); // Increase limit for file uploads
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files
 app.use(express.static(path.join(__dirname)));
@@ -154,11 +159,21 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password, profileImage } = req.body;
   try {
+    // Validate required fields
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: 'Username, email, and password are required' });
+    }
+
+    // Check if user already exists
     const existingUser = data.users.find(u => u.username === username || u.email === email);
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
     const user = {
       _id: Date.now().toString(),
       username,
@@ -167,26 +182,55 @@ app.post('/api/auth/register', async (req, res) => {
       profileImage,
       createdAt: new Date()
     };
+
     data.users.push(user);
     saveData();
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.status(201).json({ token, user: { _id: user._id, username, email, profileImage } });
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '24h' });
+
+    res.status(201).json({
+      token,
+      user: { _id: user._id, username, email, profileImage },
+      message: 'Registration successful'
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Registration failed' });
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Registration failed. Please try again.' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
+    // Validate required fields
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required' });
+    }
+
+    // Find user
     const user = data.users.find(u => u.username === username);
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token, user: { _id: user._id, username: user.username, email: user.email, profileImage: user.profileImage } });
+
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '24h' });
+
+    res.json({
+      token,
+      user: { _id: user._id, username: user.username, email: user.email, profileImage: user.profileImage },
+      message: 'Login successful'
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Login failed' });
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Login failed. Please try again.' });
   }
 });
 
@@ -298,10 +342,20 @@ app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => 
     };
     data.files.push(fileDoc);
     saveData();
-    res.json({ message: 'File uploaded successfully', file: fileDoc });
+    res.json({
+      message: 'File uploaded successfully',
+      file: fileDoc,
+      success: true
+    });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    // Clean up uploaded file if database save failed
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Error cleaning up file:', err);
+      });
+    }
+    res.status(500).json({ error: 'Failed to upload file. Please try again.' });
   }
 });
 
