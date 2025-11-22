@@ -7,6 +7,14 @@
       "password": "$2a$10$Gv4eaz28CfdxovoxpE9QN.POGBlLIeiEGQZh1pOEHvXVDl//Aqvp2",
       "profileImage": null,
       "createdAt": "2025-11-22T05:13:28.355Z"
+    },
+    {
+      "_id": "1763788695736",
+      "username": "re",
+      "email": "lokendrafranklin653@gmail.com",
+      "password": "$2a$10$qFo7j30qxY6oB3cMgZAnP.alOUMRpadJ78oQPyNP3Mbi3diBuWDlm",
+      "profileImage": null,
+      "createdAt": "2025-11-22T05:18:15.736Z"
     }
   ],
   "notes": [],
