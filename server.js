@@ -45,13 +45,20 @@ const dataFile = path.join(__dirname, 'data.json');
 let data = { users: [], notes: [], files: [] };
 
 function loadData() {
+  console.log('Loading data from:', dataFile);
   if (fs.existsSync(dataFile)) {
     data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+    console.log('Data loaded successfully:', data);
+  } else {
+    console.log('Data file does not exist, initializing empty data');
   }
 }
 
 function saveData() {
+  console.log('Saving data to:', dataFile);
+  console.log('Data to save:', JSON.stringify(data, null, 2));
   fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
+  console.log('Data saved successfully');
 }
 
 loadData();
@@ -222,24 +229,29 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
+  console.log('Login request for user:', username);
   try {
     // Validate required fields
     if (!username || !password) {
+      console.log('Validation failed: missing username or password');
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
     // Find user
     const user = data.users.find(u => u.username === username);
     if (!user) {
+      console.log('User not found:', username);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      console.log('Invalid password for user:', username);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    console.log('Login successful for user:', username);
     // Generate JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '24h' });
 
@@ -345,10 +357,13 @@ const upload = multer({ storage: storage });
 
 // File upload route
 app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => {
+  console.log('File upload request from user:', req.user.username);
   if (!req.file) {
+    console.log('No file uploaded');
     return res.status(400).json({ error: 'No file uploaded' });
   }
   try {
+    console.log('File received:', req.file.originalname, req.file.mimetype, req.file.size);
     const fileDoc = {
       _id: Date.now().toString(),
       name: req.file.originalname,
@@ -362,6 +377,7 @@ app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => 
     };
     data.files.push(fileDoc);
     saveData();
+    console.log('File uploaded successfully:', req.file.originalname);
     res.json({
       message: 'File uploaded successfully',
       file: fileDoc,

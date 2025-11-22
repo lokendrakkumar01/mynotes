@@ -68,6 +68,13 @@
       "email": "test4@example.com",
       "password": "$2a$10$AD3vOiS5at/Z2QUhFd8knOCyxtcc/BjKUWxweVMr8r3QlTQkiSKxO",
       "createdAt": "2025-11-22T07:12:15.416Z"
+    },
+    {
+      "_id": "1763796475745",
+      "username": "testuser6",
+      "email": "test6@example.com",
+      "password": "$2a$10$QELkfO11ilTLuPzhB56ttuuqiFo5NZZRvbHDp.toZxuoHobP5rDc2",
+      "createdAt": "2025-11-22T07:27:55.746Z"
     }
   ],
   "notes": [
