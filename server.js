@@ -1,67 +1,46 @@
 const express = require('express');
-const cors = require('cors');
-
-
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const dotenv = require('dotenv');
-
-dotenv.config();
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const cors = require('cors');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Middleware
-app.use(cors({
-  origin: '*', // Allow all origins for cross-device access
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
-}));
-app.use(express.json({ limit: '50mb' })); // Increase limit for file uploads
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Initialize Passport
-
-
-// Serve static files
-app.use(express.static(path.join(__dirname)));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-app.get('/share', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Local JSON storage
+// Data storage
 const dataFile = path.join(__dirname, 'data.json');
 let data = { users: [], notes: [], files: [] };
 
+// Helper to get server IP
+function getServerIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+// Load data from file
 function loadData() {
   console.log('Loading data from:', dataFile);
   if (fs.existsSync(dataFile)) {
     try {
       const fileContent = fs.readFileSync(dataFile, 'utf8');
       data = JSON.parse(fileContent);
-      console.log('Data loaded successfully');
+      console.log('✅ Data loaded successfully');
     } catch (error) {
-      console.error('Error parsing data.json:', error);
-      // Backup corrupt file
+      console.error('❌ Error parsing data.json:', error);
       const backupFile = dataFile + '.bak.' + Date.now();
       fs.copyFileSync(dataFile, backupFile);
       console.log(`Corrupt data file backed up to ${backupFile}`);
-      // Initialize with empty data
       data = { users: [], notes: [], files: [] };
       console.log('Initialized with empty data structure');
     }
@@ -71,331 +50,338 @@ function loadData() {
   }
 }
 
+// Save data to file
 function saveData() {
-  console.log('Saving data to:', dataFile);
-  console.log('Data to save:', JSON.stringify(data, null, 2));
-  fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
-  console.log('Data saved successfully');
-}
-
-loadData();
-
-// Get server IP for dynamic callback URLs
-function getServerIP() {
-  const os = require('os');
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return 'localhost'; // fallback
-}
-
-
-// Routes
-
-
-// Local auth routes
-app.post('/api/auth/register', async (req, res) => {
-  const { username, email, password, profileImage } = req.body;
   try {
-    // Validate required fields
+    fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
+    console.log('✅ Data saved successfully');
+  } catch (error) {
+    console.error('❌ Error saving data:', error);
+  }
+}
+
+// Middleware
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files
+app.use(express.static(__dirname));
+
+// File upload configuration
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB max file size
+  }
+});
+
+// JWT verification middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+}
+
+// Root route - serve index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Server is running',
+    ip: getServerIP(),
+    port: PORT
+  });
+});
+
+// AUTHENTICATION ROUTES
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password, profileImage } = req.body;
+
+    // Validation
     if (!username || !email || !password) {
-      return res.status(400).json({ message: 'Username, email, and password are required' });
+      return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Check if user already exists
-    const existingUser = data.users.find(u => u.username === username || u.email === email);
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+    // Check if user exists
+    if (data.users.find(u => u.username === username)) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    if (data.users.find(u => u.email === email)) {
+      return res.status(400).json({ message: 'Email already registered' });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const user = {
-      _id: Date.now().toString(),
+    // Create new user
+    const newUser = {
+      id: Date.now().toString(),
       username,
       email,
       password: hashedPassword,
-      profileImage,
-      createdAt: new Date()
+      profileImage: profileImage || null,
+      createdAt: new Date().toISOString()
     };
 
-    data.users.push(user);
+    data.users.push(newUser);
     saveData();
 
-    // Generate JWT token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '24h' });
+    // Create token
+    const token = jwt.sign(
+      { id: newUser.id, username: newUser.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.status(201).json({
+      message: 'User registered successfully',
       token,
-      user: { _id: user._id, username, email, profileImage },
-      message: 'Registration successful'
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        profileImage: newUser.profileImage
+      }
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Registration failed. Please try again.' });
+    console.error('Register error:', error);
+    res.status(500).json({ message: 'Server error during registration' });
   }
 });
 
+// Login
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
-  console.log('Login request for user:', username);
   try {
-    // Validate required fields
+    const { username, password } = req.body;
+
+    // Validation
     if (!username || !password) {
-      console.log('Validation failed: missing username or password');
       return res.status(400).json({ message: 'Username and password are required' });
     }
 
     // Find user
     const user = data.users.find(u => u.username === username);
     if (!user) {
-      console.log('User not found:', username);
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Invalid username or password' });
     }
 
     // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      console.log('Invalid password for user:', username);
-      return res.status(400).json({ message: 'Invalid credentials' });
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Invalid username or password' });
     }
 
-    console.log('Login successful for user:', username);
-    // Generate JWT token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '24h' });
+    // Create token
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
+      message: 'Login successful',
       token,
-      user: { _id: user._id, username: user.username, email: user.email, profileImage: user.profileImage },
-      message: 'Login successful'
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        profileImage: user.profileImage
+      }
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Login failed. Please try again.' });
+    res.status(500).json({ message: 'Server error during login' });
   }
 });
 
-// Middleware to verify JWT
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access denied' });
+// FILE ROUTES
 
+// Get all files for authenticated user
+app.get('/api/files', authenticateToken, (req, res) => {
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
-    req.userId = verified.userId;
-    req.user = data.users.find(u => u._id === req.userId);
-    if (!req.user) return res.status(401).json({ error: 'User not found' });
-    next();
+    const userFiles = data.files.filter(f => f.uploaderId === req.user.id);
+    res.json({ files: userFiles });
   } catch (error) {
-    res.status(400).json({ error: 'Invalid token' });
-  }
-};
-
-// Notes routes
-app.get('/api/notes', verifyToken, async (req, res) => {
-  try {
-    const notes = data.notes.filter(n => n.userId === req.userId);
-    res.json(notes);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch notes' });
+    console.error('Get files error:', error);
+    res.status(500).json({ message: 'Error fetching files' });
   }
 });
 
-app.post('/api/notes', verifyToken, async (req, res) => {
+// Upload files
+app.post('/api/files/upload', authenticateToken, upload.array('files', 10), (req, res) => {
   try {
-    const note = { ...req.body, userId: req.userId, _id: Date.now().toString(), createdAt: new Date() };
-    data.notes.push(note);
-    saveData();
-    res.status(201).json(note);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create note' });
-  }
-});
-
-app.put('/api/notes/:id', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const noteIndex = data.notes.findIndex(n => n._id === id && n.userId === req.userId);
-    if (noteIndex === -1) {
-      return res.status(404).json({ error: 'Note not found' });
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
     }
-    data.notes[noteIndex] = { ...data.notes[noteIndex], ...req.body, updatedAt: new Date() };
+
+    const uploadedFiles = req.files.map(file => {
+      const fileData = {
+        _id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
+        name: file.originalname,
+        filename: file.filename,
+        type: getFileType(file.mimetype),
+        size: file.size,
+        mimetype: file.mimetype,
+        uploadDate: new Date().toISOString(),
+        uploaderId: req.user.id,
+        uploader: req.user.username,
+        uploaderEmail: data.users.find(u => u.id === req.user.id)?.email || ''
+      };
+
+      data.files.push(fileData);
+      return fileData;
+    });
+
     saveData();
-    res.json({ message: 'Note updated successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update note' });
-  }
-});
 
-app.delete('/api/notes/:id', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const noteIndex = data.notes.findIndex(n => n._id === id && n.userId === req.userId);
-    if (noteIndex === -1) {
-      return res.status(404).json({ error: 'Note not found' });
-    }
-    data.notes.splice(noteIndex, 1);
-    saveData();
-    res.json({ message: 'Note deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete note' });
-  }
-});
-
-// File type helper
-function getFileType(mimeType) {
-  if (mimeType.startsWith('image/')) return 'img';
-  if (mimeType === 'application/pdf') return 'pdf';
-  if (mimeType === 'text/plain') return 'txt';
-  if (mimeType.includes('document') || mimeType.includes('word')) return 'doc';
-  if (mimeType.startsWith('video/')) return 'video';
-  return 'other';
-}
-
-// File upload configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-
-const upload = multer({ storage: storage });
-
-// File upload route
-app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => {
-  console.log('File upload request from user:', req.user.username);
-  if (!req.file) {
-    console.log('No file uploaded');
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-  try {
-    console.log('File received:', req.file.originalname, req.file.mimetype, req.file.size);
-    const fileDoc = {
-      _id: Date.now().toString(),
-      name: req.file.originalname,
-      type: getFileType(req.file.mimetype),
-      size: req.file.size,
-      path: req.file.path,
-      userId: req.userId,
-      uploader: req.user.username || 'Unknown',
-      uploaderEmail: req.user.email || 'Unknown',
-      uploadDate: new Date()
-    };
-    data.files.push(fileDoc);
-    saveData();
-    console.log('File uploaded successfully:', req.file.originalname);
-    res.json({
-      message: 'File uploaded successfully',
-      file: fileDoc,
-      success: true
+    res.status(201).json({
+      message: 'Files uploaded successfully',
+      files: uploadedFiles
     });
   } catch (error) {
     console.error('Upload error:', error);
-    // Clean up uploaded file if database save failed
-    if (req.file && req.file.path) {
-      fs.unlink(req.file.path, (err) => {
-        if (err) console.error('Error cleaning up file:', err);
-      });
-    }
-    res.status(500).json({ error: 'Failed to upload file. Please try again.' });
-  }
-});
-
-// Get user files
-app.get('/api/files', verifyToken, async (req, res) => {
-  try {
-    const files = data.files.filter(f => f.userId === req.userId);
-    res.json({ files });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch files' });
+    res.status(500).json({ message: 'Error uploading files' });
   }
 });
 
 // Download file
-app.get('/api/files/:id/download', verifyToken, async (req, res) => {
+app.get('/api/files/:id/download', authenticateToken, (req, res) => {
   try {
-    const file = data.files.find(f => f._id === req.params.id && f.userId === req.userId);
-    if (!file) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-    if (req.query.inline === 'true') {
-      res.sendFile(file.path);
-    } else {
-      res.download(file.path, file.name);
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to download file' });
-  }
-});
+    const file = data.files.find(f => f._id === req.params.id);
 
-// Rename file
-app.put('/api/files/:id/rename', verifyToken, async (req, res) => {
-  try {
-    const { newName } = req.body;
-    const fileIndex = data.files.findIndex(f => f._id === req.params.id && f.userId === req.userId);
-    if (fileIndex === -1) {
-      return res.status(404).json({ error: 'File not found' });
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
     }
-    data.files[fileIndex].name = newName;
-    saveData();
-    res.json({ message: 'File renamed successfully' });
+
+    const filePath = path.join(__dirname, 'uploads', file.filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found on disk' });
+    }
+
+    res.download(filePath, file.name);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to rename file' });
+    console.error('Download error:', error);
+    res.status(500).json({ message: 'Error downloading file' });
   }
 });
 
 // Delete file
-app.delete('/api/files/:id', verifyToken, async (req, res) => {
+app.delete('/api/files/:id', authenticateToken, (req, res) => {
   try {
-    const fileIndex = data.files.findIndex(f => f._id === req.params.id && f.userId === req.userId);
+    const fileIndex = data.files.findIndex(f => f._id === req.params.id && f.uploaderId === req.user.id);
+
     if (fileIndex === -1) {
-      return res.status(404).json({ error: 'File not found' });
+      return res.status(404).json({ message: 'File not found or unauthorized' });
     }
+
     const file = data.files[fileIndex];
-    // Delete file from disk
-    fs.unlink(file.path, (err) => {
-      if (err) console.error('Error deleting file from disk:', err);
-    });
+    const filePath = path.join(__dirname, 'uploads', file.filename);
+
+    // Delete from disk
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    // Delete from data
     data.files.splice(fileIndex, 1);
     saveData();
+
     res.json({ message: 'File deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete file' });
+    console.error('Delete error:', error);
+    res.status(500).json({ message: 'Error deleting file' });
   }
 });
 
-// Get user profile
-app.get('/api/profile', verifyToken, async (req, res) => {
+// Rename file
+app.put('/api/files/:id/rename', authenticateToken, (req, res) => {
   try {
-    const user = data.users.find(u => u._id === req.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    const { newName } = req.body;
+
+    if (!newName) {
+      return res.status(400).json({ message: 'New name is required' });
     }
-    res.json(user);
+
+    const file = data.files.find(f => f._id === req.params.id && f.uploaderId === req.user.id);
+
+    if (!file) {
+      return res.status(404).json({ message: 'File not found or unauthorized' });
+    }
+
+    file.name = newName;
+    saveData();
+
+    res.json({ message: 'File renamed successfully', file });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch user profile' });
+    console.error('Rename error:', error);
+    res.status(500).json({ message: 'Error renaming file' });
   }
 });
 
-// Logout route
-app.post('/auth/logout', (req, res) => {
-  res.json({ message: 'Logged out successfully' });
-});
+// Helper function to determine file type
+function getFileType(mimetype) {
+  if (mimetype.startsWith('image/')) return 'img';
+  if (mimetype === 'application/pdf') return 'pdf';
+  if (mimetype === 'text/plain') return 'txt';
+  if (mimetype.includes('document') || mimetype.includes('word')) return 'doc';
+  if (mimetype.startsWith('video/')) return 'video';
+  return 'other';
+}
 
+// Load initial data
+loadData();
+
+// Start server
 const serverIP = getServerIP();
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT} and accessible from all network interfaces`);
-  console.log(`Local access: http://localhost:${PORT}`);
-  console.log(`Network access: http://${serverIP}:${PORT}`);
+  console.log('\n========================================');
+  console.log('✅ SERVER RUNNING SUCCESSFULLY!');
+  console.log('========================================');
+  console.log(`📍 Local access: http://localhost:${PORT}`);
+  console.log(`🌐 Network access: http://${serverIP}:${PORT}`);
+  console.log('========================================');
+  console.log('\n📱 To access from another device:');
+  console.log(`   Open browser and go to: http://${serverIP}:${PORT}`);
+  console.log('\n⚠️  Make sure both devices are on the same WiFi network!');
+  console.log('========================================\n');
 });

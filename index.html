@@ -4,27 +4,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notes Manager- Lokendra kumar </title>
+    <title>Notes Manager - Advanced</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
+    <!-- Loading Screen -->
+    <div class="loader" id="loader">
+        <div class="loader-spinner"></div>
+        <p>Loading Notes Manager...</p>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-status" id="connectionStatus">
+        <i class="fas fa-wifi"></i>
+        <span id="connectionText">Checking connection...</span>
+    </div>
+
     <!-- Login Form -->
     <div class="login-container" id="loginContainer">
         <div class="login-form" id="loginFormContainer">
-            <h2><i class="fas fa-file-alt"></i> Notes Manager by Lokendra kumar</h2>
+            <h2><i class="fas fa-file-alt"></i> Notes Manager - UA ACADEMY</h2>
             <form id="loginForm">
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" class="form-control" placeholder="Enter your username" required>
+                    <input type="text" id="username" class="form-control" placeholder="Enter your username" required
+                        autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" class="form-control" placeholder="Enter your password"
-                        required>
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required
+                        autocomplete="current-password">
                 </div>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
                     <i class="fas fa-sign-in-alt"></i> Login
                 </button>
             </form>
@@ -34,7 +47,7 @@
         </div>
 
         <!-- Registration Form -->
-        <div class="register-form" id="registerFormContainer">
+        <div class="register-form" id="registerFormContainer" style="display: none;">
             <h2><i class="fas fa-user-plus"></i> Create Account</h2>
 
             <div class="profile-upload">
@@ -53,23 +66,25 @@
             <form id="registerForm">
                 <div class="form-group">
                     <label for="regUsername">Username</label>
-                    <input type="text" id="regUsername" class="form-control" placeholder="Choose a username" required>
+                    <input type="text" id="regUsername" class="form-control" placeholder="Choose a username" required
+                        autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="regEmail">Email Address</label>
-                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required>
+                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required
+                        autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="regPassword">Password</label>
                     <input type="password" id="regPassword" class="form-control" placeholder="Create a password"
-                        required>
+                        required autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="regConfirmPassword">Confirm Password</label>
                     <input type="password" id="regConfirmPassword" class="form-control"
-                        placeholder="Confirm your password" required>
+                        placeholder="Confirm your password" required autocomplete="new-password">
                 </div>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
                     <i class="fas fa-user-plus"></i> Create Account
                 </button>
             </form>
@@ -85,7 +100,7 @@
             <header>
                 <div class="logo">
                     <i class="fas fa-file-alt"></i>
-                    <span>NOTES MANEGER- UA ACADEMEY</span>
+                    <span>NOTES MANAGER - UA ACADEMY</span>
                 </div>
                 <div class="user-info">
                     <div class="user-avatar">
