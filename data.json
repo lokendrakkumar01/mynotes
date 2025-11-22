@@ -15,8 +15,92 @@
       "password": "$2a$10$qFo7j30qxY6oB3cMgZAnP.alOUMRpadJ78oQPyNP3Mbi3diBuWDlm",
       "profileImage": null,
       "createdAt": "2025-11-22T05:18:15.736Z"
+    },
+    {
+      "_id": "1763793552103",
+      "githubId": "192846835",
+      "username": "lokendrakkumar01",
+      "email": "lokendrakumar4812@gmail.com",
+      "name": "lokendra kumar",
+      "avatar": "https://avatars.githubusercontent.com/u/192846835?v=4",
+      "createdAt": "2025-11-22T06:39:12.104Z"
+    },
+    {
+      "_id": "1763794016926",
+      "username": "testuser",
+      "email": "test@example.com",
+      "password": "$2a$10$moAhXa.Io5vzEbUa1udth.b4C3NsgSXX1iPdkTo1a/uWILqV2jvOi",
+      "createdAt": "2025-11-22T06:46:56.926Z"
+    },
+    {
+      "_id": "1763794165644",
+      "username": "Lokendrakhjgjg",
+      "email": "lokendrakumar4819992@gmail.com",
+      "password": "$2a$10$cebtqNsx//0Ft3t7szOGMOSvRF3LFw/ggEeiuKjtHdtJkjrWOpKD.",
+      "profileImage": null,
+      "createdAt": "2025-11-22T06:49:25.644Z"
+    },
+    {
+      "_id": "1763794444409",
+      "username": "testuser2",
+      "email": "test2@example.com",
+      "password": "$2a$10$DQOom7ZdMktgE1oaU6CJQeUIe200NQdnvqIgWBuhlhXfrIYVIWmGa",
+      "createdAt": "2025-11-22T06:54:04.409Z"
     }
   ],
-  "notes": [],
-  "files": []
+  "notes": [
+    {
+      "title": "Test Note",
+      "content": "This is a test note",
+      "userId": "1763794016926",
+      "_id": "1763794027680",
+      "createdAt": "2025-11-22T06:47:07.680Z"
+    }
+  ],
+  "files": [
+    {
+      "_id": "1763794179318",
+      "name": "Notes Manager- Lokendra kumar and 2 more pages - Personal - Microsoftâ Edge 2025-11-21 02-20-41.mp4",
+      "type": "video",
+      "size": 54760664,
+      "path": "uploads\\1763794178683-Notes Manager- Lokendra kumar and 2 more pages - Personal - Microsoftâ Edge 2025-11-21 02-20-41.mp4",
+      "userId": "1763794165644",
+      "uploader": "Lokendrakhjgjg",
+      "uploaderEmail": "lokendrakumar4819992@gmail.com",
+      "uploadDate": "2025-11-22T06:49:39.318Z"
+    },
+    {
+      "_id": "1763794262562",
+      "name": "mynoyes manager project.mp4",
+      "type": "video",
+      "size": 16052280,
+      "path": "uploads\\1763794262422-mynoyes manager project.mp4",
+      "userId": "1763794165644",
+      "uploader": "Lokendrakhjgjg",
+      "uploaderEmail": "lokendrakumar4819992@gmail.com",
+      "uploadDate": "2025-11-22T06:51:02.562Z"
+    },
+    {
+      "_id": "1763794476565",
+      "name": "Exam Schedule.2025-26.pdf",
+      "type": "pdf",
+      "size": 9331888,
+      "path": "uploads\\1763794476460-Exam Schedule.2025-26.pdf",
+      "userId": "1763794165644",
+      "uploader": "Lokendrakhjgjg",
+      "uploaderEmail": "lokendrakumar4819992@gmail.com",
+      "uploadDate": "2025-11-22T06:54:36.565Z"
+    },
+    {
+      "_id": "1763794661374",
+      "name": "mynoyes manager project.mp4",
+      "type": "video",
+      "size": 16052280,
+      "path": "uploads\\1763794661254-mynoyes manager project.mp4",
+      "userId": "1763794165644",
+      "uploader": "Lokendrakhjgjg",
+      "uploaderEmail": "lokendrakumar4819992@gmail.com",
+      "uploadDate": "2025-11-22T06:57:41.374Z"
+    }
+  ]
 }

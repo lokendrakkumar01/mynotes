@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
-const GitHubStrategy = require('passport-github').Strategy;
+const GitHubStrategy = require('passport-github2');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -28,6 +28,9 @@ app.get('/', (req, res) => {
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+app.get('/share', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Local JSON storage
 const dataFile = path.join(__dirname, 'data.json');
@@ -45,38 +48,40 @@ function saveData() {
 
 loadData();
 
-// Passport configuration for GitHub
-passport.use(new GitHubStrategy({
-  clientID: process.env.GITHUB_CLIENT_ID,
-  clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:3000/auth/github/callback"
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    let user = data.users.find(u => u.githubId === profile.id);
+// Passport configuration for GitHub (only if credentials are provided)
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  passport.use(new GitHubStrategy({
+    clientID: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:3000/auth/github/callback"
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      let user = data.users.find(u => u.githubId === profile.id);
 
-    if (!user) {
-      user = {
-        _id: Date.now().toString(),
-        githubId: profile.id,
-        username: profile.username,
-        email: profile.emails ? profile.emails[0].value : null,
-        name: profile.displayName,
-        avatar: profile.photos ? profile.photos[0].value : null,
-        createdAt: new Date()
-      };
-      data.users.push(user);
-      saveData();
+      if (!user) {
+        user = {
+          _id: Date.now().toString(),
+          githubId: profile.id,
+          username: profile.username,
+          email: profile.emails ? profile.emails[0].value : null,
+          name: profile.displayName,
+          avatar: profile.photos ? profile.photos[0].value : null,
+          createdAt: new Date()
+        };
+        data.users.push(user);
+        saveData();
+      }
+
+      return done(null, user);
+    } catch (error) {
+      return done(error, null);
     }
-
-    return done(null, user);
-  } catch (error) {
-    return done(error, null);
-  }
-}));
+  }));
+}
 
 // Passport configuration for Google (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
+  passport.use('google', new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/auth/google/callback"
@@ -119,27 +124,31 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Routes
-app.get('/auth/github', passport.authenticate('github'));
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  app.get('/auth/github', passport.authenticate('github'));
 
-app.get('/auth/github/callback',
-  passport.authenticate('github', { failureRedirect: '/login' }),
-  (req, res) => {
-    // Successful authentication, redirect to frontend with token.
-    const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.redirect(`http://localhost:3000?token=${token}`);
-  }
-);
+  app.get('/auth/github/callback',
+    passport.authenticate('github', { failureRedirect: '/login' }),
+    (req, res) => {
+      // Successful authentication, redirect to frontend with token.
+      const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
+      res.redirect(`http://localhost:3000?token=${token}`);
+    }
+  );
+}
 
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
-  (req, res) => {
-    // Successful authentication, redirect to frontend with token.
-    const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.redirect(`http://localhost:3000?token=${token}`);
-  }
-);
+  app.get('/auth/google/callback',
+    passport.authenticate('google', { failureRedirect: '/login' }),
+    (req, res) => {
+      // Successful authentication, redirect to frontend with token.
+      const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
+      res.redirect(`http://localhost:3000?token=${token}`);
+    }
+  );
+}
 
 // Local auth routes
 app.post('/api/auth/register', async (req, res) => {
