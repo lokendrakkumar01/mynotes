@@ -86,70 +86,61 @@ function init() {
 
 function showGitHubPagesMessage() {
     if (loader) loader.style.display = 'none';
+    if (connectionStatus) connectionStatus.style.display = 'none';
+
     if (loginContainer) {
         loginContainer.innerHTML = `
-            <div class="login-form" style="max-width: 600px; text-align: center;">
+            <div class="login-form" style="max-width: 600px; text-align: center; padding: 30px;">
+                <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
                 <h2 style="color: #ef4444; margin-bottom: 20px;">
-                    <i class="fas fa-exclamation-triangle"></i> 
-                    GitHub Pages Demo Only
+                    GitHub Pages - Demo Only
                 </h2>
-                <div style="text-align: left; background: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <p style="margin-bottom: 15px;">
-                        <strong>⚠️ This application requires a backend server to function.</strong>
+                
+                <div style="background: #fee2e2; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
+                    <p style="margin-bottom: 15px; font-size: 16px; line-height: 1.6;">
+                        <strong>यह application को चलाने के लिए backend server की जरूरत है।</strong>
                     </p>
-                    <p style="margin-bottom: 15px;">
-                        GitHub Pages can only host static files (HTML, CSS, JavaScript) and cannot run the Node.js server needed for:
+                    <p style="margin-bottom: 0; font-size: 14px; color: #991b1b;">
+                        GitHub Pages सिर्फ static files host कर सकता है - Node.js server नहीं चला सकता।
                     </p>
-                    <ul style="margin-left: 20px; margin-bottom: 15px;">
-                        <li>User authentication (login/register)</li>
-                        <li>File storage and retrieval</li>
-                        <li>Database operations</li>
-                    </ul>
                 </div>
                 
-                <div style="background: #e0f2fe; padding: 20px; border-radius: 12px; border-left: 4px solid #0284c7;">
-                    <h3 style="color: #0284c7; margin-bottom: 15px;">
-                        <i class="fas fa-rocket"></i> How to Run Locally:
+                <div style="background: #dbeafe; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
+                    <h3 style="color: #1e40af; margin-bottom: 15px; font-size: 18px;">
+                        📱 Locally कैसे चलाएं:
                     </h3>
-                    <ol style="text-align: left; margin-left: 20px; line-height: 1.8;">
-                        <li><strong>Clone the repository:</strong><br>
-                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
-                                git clone [your-repo-url]
-                            </code>
-                        </li>
-                        <li><strong>Install dependencies:</strong><br>
-                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
-                                npm install
-                            </code>
-                        </li>
-                        <li><strong>Start the server:</strong><br>
-                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
-                                node server.js
-                            </code>
-                        </li>
-                        <li><strong>Open in browser:</strong><br>
-                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
-                                http://localhost:3000
-                            </code>
-                        </li>
+                    <ol style="margin-left: 20px; line-height: 1.8; font-size: 14px;">
+                        <li>Repository clone करें</li>
+                        <li><code style="background: white; padding: 3px 8px; border-radius: 4px;">npm install</code> चलाएं</li>
+                        <li><code style="background: white; padding: 3px 8px; border-radius: 4px;">node server.js</code> चलाएं</li>
+                        <li>Browser में <code style="background: white; padding: 3px 8px; border-radius: 4px;">localhost:3000</code> खोलें</li>
                     </ol>
                 </div>
                 
-                <div style="margin-top: 20px;">
-                    <a href="https://github.com/[your-username]/mynotes" 
-                       class="btn btn-primary" 
-                       style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
-                        <i class="fab fa-github"></i> View on GitHub
-                    </a>
+                <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p style="margin: 0; color: #166534; font-size: 14px;">
+                        💡 <strong>Full features के लिए:</strong><br>
+                        Computer पर locally run करें
+                    </p>
                 </div>
                 
-                <p style="margin-top: 20px; color: #64748b; font-size: 14px;">
-                    💡 For a fully functional demo, please run the application locally.
+                <a href="https://github.com/lokendrakkumar01/mynotes" 
+                   class="btn btn-primary" 
+                   target="_blank"
+                   style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 12px 24px;">
+                    <i class="fab fa-github"></i> GitHub Repository
+                </a>
+                
+                <p style="margin-top: 20px; color: #64748b; font-size: 13px;">
+                    इस page को computer पर खोलें और locally run करें।
                 </p>
             </div>
         `;
         loginContainer.style.display = 'flex';
     }
+
+    // Also hide app container completely
+    if (appContainer) appContainer.style.display = 'none';
 }
 
 function hideLoader() {
