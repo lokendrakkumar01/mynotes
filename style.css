@@ -119,6 +119,45 @@ body {
     background: var(--primary-light);
 }
 
+.btn-github {
+    background: #24292e;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-github:hover {
+    background: #1a1e22;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.divider {
+    margin: 20px 0;
+    position: relative;
+    text-align: center;
+    color: #666;
+}
+
+.divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #e1e5e9;
+}
+
+.divider span {
+    background: white;
+    padding: 0 10px;
+    position: relative;
+    z-index: 1;
+}
+
 .register-link, .login-link {
     text-align: center;
     margin-top: 20px;

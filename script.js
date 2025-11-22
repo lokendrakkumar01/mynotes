@@ -25,6 +25,7 @@ const userEmail = document.getElementById('userEmail');
 const logoutBtn = document.getElementById('logoutBtn');
 const contactBtn = document.getElementById('contactBtn');
 const themeToggle = document.getElementById('themeToggle');
+const githubLoginBtn = document.getElementById('githubLoginBtn');
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 const progressContainer = document.getElementById('progressContainer');
@@ -61,6 +62,7 @@ function init() {
     checkLoginStatus();
     setupEventListeners();
     loadThemePreference();
+    checkForTokenInURL();
 }
 
 // Check if user is already logged in
@@ -101,6 +103,9 @@ function setupEventListeners() {
 
     // Theme toggle
     themeToggle.addEventListener('click', toggleTheme);
+
+    // GitHub login
+    githubLoginBtn.addEventListener('click', handleGitHubLogin);
 
     // File upload
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -404,7 +409,7 @@ async function handleFiles(fileList) {
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch(`${API_BASE_URL}/files/upload`, {
+            const response = await fetch(`${API_BASE_URL}/upload`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${authToken}`
@@ -772,6 +777,55 @@ async function loadUserFiles() {
     } catch (error) {
         console.error('Error loading files:', error);
     }
+}
+
+// Check for token in URL (for GitHub OAuth callback)
+function checkForTokenInURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+        authToken = token;
+        localStorage.setItem('authToken', authToken);
+        // Fetch user profile
+        fetchUserProfile();
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+// Fetch user profile after GitHub login
+async function fetchUserProfile() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/profile`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+
+        if (response.ok) {
+            const user = await response.json();
+            currentUser = {
+                _id: user._id,
+                username: user.username,
+                email: user.email,
+                profileImage: user.avatar || user.profileImage
+            };
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            loadUserFiles();
+            showApp();
+            showNotification(`Welcome, ${user.username}!`);
+        } else {
+            showNotification('Failed to fetch user profile', true);
+        }
+    } catch (error) {
+        console.error('Profile fetch error:', error);
+        showNotification('Network error. Please try again.', true);
+    }
+}
+
+// Handle GitHub login
+function handleGitHubLogin() {
+    window.location.href = '/auth/github';
 }
 
 // Initialize the app when DOM is loaded

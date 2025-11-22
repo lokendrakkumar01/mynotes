@@ -1,522 +1,340 @@
 const express = require('express');
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
+const passport = require('passport');
+const GitHubStrategy = require('passport-github2').Strategy;
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const { MongoClient, ObjectId } = require('mongodb');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const passport = require('passport');
-const GitHubStrategy = require('passport-github2').Strategy;
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// MongoDB connection string
-const uri = process.env.MONGODB_URI;
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
-});
-
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (HTML, CSS, JS)
-app.use(express.static('.'));
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+// Serve static files
+app.use(express.static(path.join(__dirname)));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
-  }
-});
+// MongoDB connection
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
+const dbName = 'notesManager';
+let db;
 
-// Database collections
-let usersCollection;
-let filesCollection;
-
-// Connect to MongoDB
-async function connectToMongoDB() {
+async function connectToMongo() {
   try {
-    // Connect the client to the server
+    const client = new MongoClient(mongoUri);
     await client.connect();
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-
-    const database = client.db("notes_manager");
-    usersCollection = database.collection("users");
-    filesCollection = database.collection("files");
-
-    // Create indexes
-    await usersCollection.createIndex({ username: 1 }, { unique: true });
-    await usersCollection.createIndex({ email: 1 }, { unique: true });
-    await filesCollection.createIndex({ uploader: 1 });
-    await filesCollection.createIndex({ uploadDate: -1 });
-
+    db = client.db(dbName);
+    console.log('Connected to MongoDB');
   } catch (error) {
-    console.error("MongoDB connection error:", error);
-    process.exit(1);
+    console.error('MongoDB connection error:', error);
   }
 }
 
-// Passport GitHub Strategy
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  passport.use(new GitHubStrategy({
-      clientID: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: "http://localhost:3000/auth/github/callback"
-    },
-    async function(accessToken, refreshToken, profile, done) {
-      try {
-        // Check if user already exists
-        let user = await usersCollection.findOne({ githubId: profile.id });
+connectToMongo();
 
-        if (user) {
-          // Update last login
-          await usersCollection.updateOne(
-            { _id: user._id },
-            { $set: { lastLogin: new Date() } }
-          );
-          return done(null, user);
-        }
+// Passport configuration for GitHub
+passport.use(new GitHubStrategy({
+  clientID: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:3000/auth/github/callback"
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const usersCollection = db.collection('users');
+    let user = await usersCollection.findOne({ githubId: profile.id });
 
-        // Create new user from GitHub profile
-        const newUser = {
-          githubId: profile.id,
-          username: profile.username || profile.displayName.replace(/\s+/g, '').toLowerCase(),
-          email: profile.emails ? profile.emails[0].value : null,
-          profileImage: profile.photos ? profile.photos[0].value : null,
-          githubProfile: profile.profileUrl,
-          createdAt: new Date(),
-          lastLogin: new Date()
-        };
-
-        const result = await usersCollection.insertOne(newUser);
-        newUser._id = result.insertedId;
-
-        return done(null, newUser);
-      } catch (error) {
-        return done(error, null);
-      }
+    if (!user) {
+      user = {
+        githubId: profile.id,
+        username: profile.username,
+        email: profile.emails ? profile.emails[0].value : null,
+        name: profile.displayName,
+        avatar: profile.photos ? profile.photos[0].value : null,
+        createdAt: new Date()
+      };
+      await usersCollection.insertOne(user);
     }
-  ));
-} else {
-  console.log('GitHub OAuth credentials not found. GitHub login will not be available.');
-}
 
-// Serialize user for session
-passport.serializeUser(function(user, done) {
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
+
+passport.serializeUser((user, done) => {
   done(null, user._id);
 });
 
-// Deserialize user from session
-passport.deserializeUser(async function(id, done) {
+passport.deserializeUser(async (id, done) => {
   try {
-    const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+    const usersCollection = db.collection('users');
+    const user = await usersCollection.findOne({ _id: id });
     done(null, user);
   } catch (error) {
     done(error, null);
   }
 });
 
-// Authentication middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid or expired token' });
-    }
-    req.user = user;
-    next();
-  });
-};
-
 // Routes
+app.get('/auth/github', passport.authenticate('github'));
 
-// User registration
+app.get('/auth/github/callback',
+  passport.authenticate('github', { failureRedirect: '/login' }),
+  (req, res) => {
+    // Successful authentication, redirect to frontend with token.
+    const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.redirect(`http://localhost:3000?token=${token}`);
+  }
+);
+
+// Local auth routes
 app.post('/api/auth/register', async (req, res) => {
+  const { username, email, password, profileImage } = req.body;
   try {
-    const { username, email, password, profileImage } = req.body;
-
-    // Validate input
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-
-    // Check if user already exists
-    const existingUser = await usersCollection.findOne({
-      $or: [{ username }, { email }]
-    });
-
+    const usersCollection = db.collection('users');
+    const existingUser = await usersCollection.findOne({ $or: [{ username }, { email }] });
     if (existingUser) {
-      return res.status(400).json({ message: 'Username or email already exists' });
+      return res.status(400).json({ message: 'User already exists' });
     }
-
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const newUser = {
+    const user = {
       username,
       email,
       password: hashedPassword,
-      profileImage: profileImage || null,
-      createdAt: new Date(),
-      lastLogin: null
+      profileImage,
+      createdAt: new Date()
     };
-
-    const result = await usersCollection.insertOne(newUser);
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: result.insertedId, username },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: result.insertedId,
-        username,
-        email,
-        profileImage: newUser.profileImage
-      }
-    });
-
+    const result = await usersCollection.insertOne(user);
+    const token = jwt.sign({ userId: result.insertedId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.status(201).json({ token, user: { _id: result.insertedId, username, email, profileImage } });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Registration failed' });
   }
 });
 
-// User login
 app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
   try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Username and password are required' });
-    }
-
-    // Find user
+    const usersCollection = db.collection('users');
     const user = await usersCollection.findOne({ username });
-
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token, user: { _id: user._id, username: user.username, email: user.email, profileImage: user.profileImage } });
+  } catch (error) {
+    res.status(500).json({ message: 'Login failed' });
+  }
+});
 
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+// Middleware to verify JWT
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Access denied' });
 
-    if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = verified.userId;
+    next();
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid token' });
+  }
+};
 
-    // Update last login
-    await usersCollection.updateOne(
-      { _id: user._id },
-      { $set: { lastLogin: new Date() } }
+// Notes routes
+app.get('/api/notes', verifyToken, async (req, res) => {
+  try {
+    const notesCollection = db.collection('notes');
+    const notes = await notesCollection.find({ userId: req.userId }).toArray();
+    res.json(notes);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+app.post('/api/notes', verifyToken, async (req, res) => {
+  try {
+    const notesCollection = db.collection('notes');
+    const note = { ...req.body, userId: req.userId, createdAt: new Date() };
+    const result = await notesCollection.insertOne(note);
+    res.status(201).json({ ...note, _id: result.insertedId });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create note' });
+  }
+});
+
+app.put('/api/notes/:id', verifyToken, async (req, res) => {
+  try {
+    const notesCollection = db.collection('notes');
+    const { id } = req.params;
+    const updateData = { ...req.body, updatedAt: new Date() };
+    const result = await notesCollection.updateOne(
+      { _id: new ObjectId(id), userId: req.userId },
+      { $set: updateData }
     );
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user._id, username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      message: 'Login successful',
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        profileImage: user.profileImage
-      }
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Get current user profile
-app.get('/api/auth/profile', authenticateToken, async (req, res) => {
-  try {
-    const user = await usersCollection.findOne(
-      { _id: new ObjectId(req.user.userId) },
-      { projection: { password: 0 } }
-    );
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.json({ user });
-  } catch (error) {
-    console.error('Profile fetch error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// File upload
-app.post('/api/files/upload', authenticateToken, upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const fileData = {
-      name: req.file.originalname,
-      filename: req.file.filename,
-      path: req.file.path,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      type: getFileType(req.file),
-      uploader: req.user.username,
-      uploaderId: new ObjectId(req.user.userId),
-      uploaderEmail: req.body.uploaderEmail || '',
-      uploadDate: new Date()
-    };
-
-    const result = await filesCollection.insertOne(fileData);
-
-    res.status(201).json({
-      message: 'File uploaded successfully',
-      file: {
-        id: result.insertedId,
-        ...fileData
-      }
-    });
-
-  } catch (error) {
-    console.error('File upload error:', error);
-    res.status(500).json({ message: `Failed to upload ${req.file ? req.file.originalname : 'file'}` });
-  }
-});
-
-// Get all files for the current user
-app.get('/api/files', authenticateToken, async (req, res) => {
-  try {
-    const files = await filesCollection.find({
-      uploaderId: new ObjectId(req.user.userId)
-    }).sort({ uploadDate: -1 }).toArray();
-
-    res.json({ files });
-  } catch (error) {
-    console.error('Files fetch error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Get all files (for admin purposes - can be restricted later)
-app.get('/api/files/all', authenticateToken, async (req, res) => {
-  try {
-    const files = await filesCollection.find({})
-      .sort({ uploadDate: -1 })
-      .toArray();
-
-    res.json({ files });
-  } catch (error) {
-    console.error('Files fetch error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Download file
-app.get('/api/files/:id/download', authenticateToken, async (req, res) => {
-  try {
-    const file = await filesCollection.findOne({
-      _id: new ObjectId(req.params.id),
-      uploaderId: new ObjectId(req.user.userId)
-    });
-
-    if (!file) {
-      return res.status(404).json({ message: 'File not found' });
-    }
-
-    if (fs.existsSync(file.path)) {
-      res.download(file.path, file.name);
-    } else {
-      res.status(404).json({ message: 'File not found on disk' });
-    }
-
-  } catch (error) {
-    console.error('File download error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Delete file
-app.delete('/api/files/:id', authenticateToken, async (req, res) => {
-  try {
-    const file = await filesCollection.findOne({
-      _id: new ObjectId(req.params.id),
-      uploaderId: new ObjectId(req.user.userId)
-    });
-
-    if (!file) {
-      return res.status(404).json({ message: 'File not found' });
-    }
-
-    // Delete file from disk
-    if (fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
-    }
-
-    // Delete from database
-    await filesCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-
-    res.json({ message: 'File deleted successfully' });
-
-  } catch (error) {
-    console.error('File delete error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Rename file
-app.put('/api/files/:id/rename', authenticateToken, async (req, res) => {
-  try {
-    const { newName } = req.body;
-
-    if (!newName) {
-      return res.status(400).json({ message: 'New name is required' });
-    }
-
-    const result = await filesCollection.updateOne(
-      {
-        _id: new ObjectId(req.params.id),
-        uploaderId: new ObjectId(req.user.userId)
-      },
-      { $set: { name: newName } }
-    );
-
     if (result.matchedCount === 0) {
-      return res.status(404).json({ message: 'File not found' });
+      return res.status(404).json({ error: 'Note not found' });
     }
-
-    res.json({ message: 'File renamed successfully' });
-
+    res.json({ message: 'Note updated successfully' });
   } catch (error) {
-    console.error('File rename error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ error: 'Failed to update note' });
   }
 });
 
-// Get all users (for admin purposes)
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.delete('/api/notes/:id', verifyToken, async (req, res) => {
   try {
-    const users = await usersCollection.find({}, {
-      projection: { password: 0 }
-    }).sort({ createdAt: -1 }).toArray();
-
-    res.json({ users });
+    const notesCollection = db.collection('notes');
+    const { id } = req.params;
+    const result = await notesCollection.deleteOne({ _id: new ObjectId(id), userId: req.userId });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+    res.json({ message: 'Note deleted successfully' });
   } catch (error) {
-    console.error('Users fetch error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ error: 'Failed to delete note' });
   }
 });
 
-// GitHub OAuth routes
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  app.get('/auth/github',
-    passport.authenticate('github', { scope: ['user:email'] })
-  );
-
-  app.get('/auth/github/callback',
-    passport.authenticate('github', { failureRedirect: '/' }),
-    async (req, res) => {
-      try {
-        // Generate JWT token for the authenticated user
-        const token = jwt.sign(
-          { userId: req.user._id, username: req.user.username },
-          process.env.JWT_SECRET,
-          { expiresIn: '7d' }
-        );
-
-        // Redirect to frontend with token
-        res.redirect(`/?token=${token}&user=${encodeURIComponent(JSON.stringify({
-          id: req.user._id,
-          username: req.user.username,
-          email: req.user.email,
-          profileImage: req.user.profileImage
-        }))}`);
-      } catch (error) {
-        console.error('GitHub callback error:', error);
-        res.redirect('/');
-      }
-    }
-  );
-}
-
-// Helper function to determine file type
-function getFileType(file) {
-  const mimeType = file.mimetype;
-  const fileName = file.originalname.toLowerCase();
-
+// File type helper
+function getFileType(mimeType) {
   if (mimeType.startsWith('image/')) return 'img';
   if (mimeType === 'application/pdf') return 'pdf';
   if (mimeType === 'text/plain') return 'txt';
   if (mimeType.includes('document') || mimeType.includes('word')) return 'doc';
-  if (mimeType.startsWith('video/') ||
-      fileName.endsWith('.mp4') ||
-      fileName.endsWith('.avi') ||
-      fileName.endsWith('.mov') ||
-      fileName.endsWith('.wmv') ||
-      fileName.endsWith('.mkv') ||
-      fileName.endsWith('.webm')) return 'video';
+  if (mimeType.startsWith('video/')) return 'video';
   return 'other';
 }
 
-// Start server
-async function startServer() {
-  await connectToMongoDB();
+// File upload configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
 
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-}
+const upload = multer({ storage: storage });
 
-startServer().catch(console.dir);
+// File upload route
+app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  try {
+    const filesCollection = db.collection('files');
+    const fileDoc = {
+      name: req.file.originalname,
+      type: getFileType(req.file.mimetype),
+      size: req.file.size,
+      path: req.file.path,
+      userId: req.userId,
+      uploadDate: new Date()
+    };
+    const result = await filesCollection.insertOne(fileDoc);
+    res.json({ message: 'File uploaded successfully', file: { ...fileDoc, _id: result.insertedId } });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
-  await client.close();
-  process.exit(0);
+// Get user files
+app.get('/api/files', verifyToken, async (req, res) => {
+  try {
+    const filesCollection = db.collection('files');
+    const files = await filesCollection.find({ userId: req.userId }).toArray();
+    res.json({ files });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// Download file
+app.get('/api/files/:id/download', verifyToken, async (req, res) => {
+  try {
+    const filesCollection = db.collection('files');
+    const file = await filesCollection.findOne({ _id: new ObjectId(req.params.id), userId: req.userId });
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    res.download(file.path, file.name);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to download file' });
+  }
+});
+
+// Rename file
+app.put('/api/files/:id/rename', verifyToken, async (req, res) => {
+  try {
+    const filesCollection = db.collection('files');
+    const { newName } = req.body;
+    const result = await filesCollection.updateOne(
+      { _id: new ObjectId(req.params.id), userId: req.userId },
+      { $set: { name: newName } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    res.json({ message: 'File renamed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to rename file' });
+  }
+});
+
+// Delete file
+app.delete('/api/files/:id', verifyToken, async (req, res) => {
+  try {
+    const filesCollection = db.collection('files');
+    const file = await filesCollection.findOne({ _id: new ObjectId(req.params.id), userId: req.userId });
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    // Delete file from disk
+    fs.unlink(file.path, (err) => {
+      if (err) console.error('Error deleting file from disk:', err);
+    });
+    await filesCollection.deleteOne({ _id: new ObjectId(req.params.id), userId: req.userId });
+    res.json({ message: 'File deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// Get user profile
+app.get('/api/profile', verifyToken, async (req, res) => {
+  try {
+    const usersCollection = db.collection('users');
+    const user = await usersCollection.findOne({ _id: req.userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+// Logout route
+app.post('/auth/logout', (req, res) => {
+  res.json({ message: 'Logged out successfully' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
