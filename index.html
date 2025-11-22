@@ -4,19 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notes Manager - Firebase Edition</title>
+    <title>Notes Manager - Advanced</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 </head>
 
 <body>
-    <!-- Loader -->
+    <!-- Loading Screen -->
     <div class="loader" id="loader">
         <div class="loader-spinner"></div>
         <p>Loading Notes Manager...</p>
@@ -28,37 +22,25 @@
         <span id="connectionText">Checking connection...</span>
     </div>
 
-    <!-- Login Container -->
+    <!-- Login Form -->
     <div class="login-container" id="loginContainer">
         <div class="login-form" id="loginFormContainer">
-            <h2><i class="fas fa-file-alt"></i> Notes Manager - Cloud Edition</h2>
-
-            <!-- Google Login -->
-            <button id="googleLoginBtn" class="btn btn-primary"
-                style="width: 100%; margin-bottom: 20px; background: #4285f4;">
-                <i class="fab fa-google"></i> Continue with Google
-            </button>
-
-            <div style="text-align: center; margin: 20px 0; color: var(--text-light);">
-                <span>────── OR ──────</span>
-            </div>
-
-            <!-- Email Login -->
+            <h2><i class="fas fa-file-alt"></i> Notes Manager - UA ACADEMY</h2>
             <form id="loginForm">
                 <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" class="form-control" placeholder="Enter your email" required>
+                    <label for="username">Username</label>
+                    <input type="text" id="username" class="form-control" placeholder="Enter your username" required
+                        autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" class="form-control" placeholder="Enter your password"
-                        required>
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required
+                        autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
-                    <i class="fas fa-sign-in-alt"></i> Login with Email
+                    <i class="fas fa-sign-in-alt"></i> Login
                 </button>
             </form>
-
             <div class="register-link">
                 Don't have an account? <a href="#" id="registerLink">Register here</a>
             </div>
@@ -68,30 +50,39 @@
         <div class="register-form" id="registerFormContainer" style="display: none;">
             <h2><i class="fas fa-user-plus"></i> Create Account</h2>
 
-            <!-- Google Signup -->
-            <button id="googleSignupBtn" class="btn btn-primary"
-                style="width: 100%; margin-bottom: 20px; background: #4285f4;">
-                <i class="fab fa-google"></i> Sign up with Google
-            </button>
-
-            <div style="text-align: center; margin: 20px 0; color: var(--text-light);">
-                <span>────── OR ──────</span>
+            <div class="profile-upload">
+                <div class="profile-image-container">
+                    <div class="profile-placeholder" id="profilePlaceholder">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <img id="profileImage" style="display: none;" alt="Profile image" title="Profile image">
+                </div>
+                <input type="file" id="profileImageInput" accept="image/*" style="display: none;">
+                <button type="button" class="profile-upload-btn" id="profileUploadBtn">
+                    <i class="fas fa-camera"></i> Upload Photo
+                </button>
             </div>
 
             <form id="registerForm">
                 <div class="form-group">
+                    <label for="regUsername">Username</label>
+                    <input type="text" id="regUsername" class="form-control" placeholder="Choose a username" required
+                        autocomplete="username">
+                </div>
+                <div class="form-group">
                     <label for="regEmail">Email Address</label>
-                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required>
+                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required
+                        autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="regPassword">Password</label>
-                    <input type="password" id="regPassword" class="form-control"
-                        placeholder="Create a password (min 6 characters)" required minlength="6">
+                    <input type="password" id="regPassword" class="form-control" placeholder="Create a password"
+                        required autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="regConfirmPassword">Confirm Password</label>
                     <input type="password" id="regConfirmPassword" class="form-control"
-                        placeholder="Confirm your password" required>
+                        placeholder="Confirm your password" required autocomplete="new-password">
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">
                     <i class="fas fa-user-plus"></i> Create Account
@@ -108,15 +99,15 @@
         <div class="container">
             <header>
                 <div class="logo">
-                    <i class="fas fa-cloud"></i>
-                    <span>NOTES MANAGER - CLOUD</span>
+                    <i class="fas fa-file-alt"></i>
+                    <span>NOTES MANAGER - UA ACADEMY</span>
                 </div>
                 <div class="user-info">
                     <div class="user-avatar">
-                        <img id="headerProfileImage" alt="User profile" style="display: none;">
                         <div class="profile-placeholder" id="headerProfilePlaceholder">
                             <i class="fas fa-user"></i>
                         </div>
+                        <img id="headerProfileImage" alt="User profile image" title="User profile image">
                     </div>
                     <div class="user-details">
                         <div class="user-name" id="userName">User</div>
@@ -137,13 +128,14 @@
             <section class="upload-section">
                 <div class="upload-area" id="uploadArea">
                     <i class="fas fa-cloud-upload-alt"></i>
-                    <h3>Upload to Cloud</h3>
-                    <p>Drag & drop files or click to browse</p>
+                    <h3>Upload Your Notes</h3>
+                    <p>Drag & drop files here or click to browse</p>
                     <button class="upload-btn">
-                        <i class="fas fa-plus"></i> Select Files
+                        <i class="fas fa-plus"></i>
+                        Select Files
                     </button>
                     <input type="file" id="fileInput" multiple
-                        accept="image/*,video/*,application/pdf,text/*,.doc,.docx" style="display: none;">
+                        accept="image/*,video/*,application/pdf,text/plain,.doc,.docx" style="display: none;">
                 </div>
                 <div class="progress-container" id="progressContainer">
                     <div class="progress-bar">
@@ -156,12 +148,12 @@
             <section class="search-filter-section">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Search files...">
+                    <input type="text" id="searchInput" placeholder="Search notes...">
                 </div>
                 <div class="filter-buttons">
                     <button class="filter-btn active" data-filter="all">All</button>
                     <button class="filter-btn" data-filter="pdf">PDF</button>
-                    <button class="filter-btn" data-filter="doc">DOC</button>
+                    <button class="filter-btn" data-filter="doc">DOC/DOCX</button>
                     <button class="filter-btn" data-filter="txt">TXT</button>
                     <button class="filter-btn" data-filter="img">Images</button>
                     <button class="filter-btn" data-filter="video">Videos</button>
@@ -169,42 +161,66 @@
             </section>
 
             <section class="files-container">
-                <div class="files-grid" id="filesGrid"></div>
+                <div class="files-grid" id="filesGrid">
+                    <!-- Files will be dynamically added here -->
+                </div>
             </section>
 
-            <!-- Preview Modal -->
             <div class="preview-modal" id="previewModal">
                 <div class="preview-content">
-                    <button class="close-preview" id="closePreview">
+                    <button class="close-preview" id="closePreview" aria-label="Close preview" title="Close preview">
                         <i class="fas fa-times"></i>
                     </button>
                     <h3 id="previewTitle">File Preview</h3>
-                    <div class="preview-body" id="previewBody"></div>
+                    <div class="preview-body" id="previewBody">
+                        <!-- Preview content will be added here -->
+                    </div>
                 </div>
             </div>
+
+
 
             <!-- Contact Modal -->
             <div class="contact-modal" id="contactModal">
                 <div class="contact-content">
-                    <button class="close-contact" id="closeContact">
+                    <button class="close-contact" id="closeContact" title="Close contact form">
                         <i class="fas fa-times"></i>
                     </button>
                     <h2><i class="fas fa-envelope"></i> Contact Us</h2>
-                    <p>Questions or feedback? Send us a message!</p>
+                    <p>Have questions, feedback, or need support? Fill out the form below and we'll get back to you as
+                        soon as possible.</p>
 
                     <form class="contact-form" id="contactForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="contactName">Your Name</label>
+                                <input type="text" id="contactName" class="form-control" placeholder="Enter your name"
+                                    required>
+                            </div>
+                            <div class="form-group">
+                                <label for="contactEmail">Your Email</label>
+                                <input type="email" id="contactEmail" class="form-control"
+                                    placeholder="Enter your email" required>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label for="contactSubject">Subject</label>
-                            <input type="text" id="contactSubject" class="form-control" placeholder="Subject" required>
+                            <input type="text" id="contactSubject" class="form-control" placeholder="Enter subject"
+                                required>
                         </div>
+
                         <div class="form-group">
                             <label for="contactMessage">Message</label>
-                            <textarea id="contactMessage" class="form-control" rows="5" placeholder="Your message"
+                            <textarea id="contactMessage" class="form-control" rows="5" placeholder="Enter your message"
                                 required></textarea>
                         </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">
-                            <i class="fas fa-paper-plane"></i> Send Message
-                        </button>
+
+                        <div class="contact-buttons">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> Send Message
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -214,13 +230,10 @@
     <!-- Notification -->
     <div class="notification" id="notification">
         <i class="fas fa-check-circle"></i>
-        <span id="notificationText">Success!</span>
+        <span id="notificationText">Operation completed successfully!</span>
     </div>
 
-    <!-- Firebase Config -->
-    <script src="firebase-config.js"></script>
-    <!-- Main App Script -->
-    <script src="firebase-app.js"></script>
+    <script src="script.js"></script>
 </body>
 
 </html>
