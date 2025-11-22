@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes Manager - Access</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+
+        .status.checking {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status.found {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status.notfound {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 18px;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .instructions {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .instructions h3 {
+            color: #334155;
+            margin-bottom: 15px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+            color: #475569;
+        }
+
+        .instructions code {
+            background: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1><i class="fas fa-file-alt"></i> Notes Manager</h1>
+
+        <div id="statusBox" class="status checking">
+            <div class="spinner"></div>
+            <p>Checking for local server...</p>
+        </div>
+
+        <div id="actionBox"></div>
+
+        <div class="instructions">
+            <h3><i class="fas fa-info-circle"></i> How to Access:</h3>
+            <ol>
+                <li>Make sure your <strong>laptop</strong> is running the server:
+                    <br><code>node server.js</code>
+                </li>
+                <li>Connect your <strong>phone and laptop</strong> to the <strong>same WiFi</strong></li>
+                <li>On phone, open: <code>http://192.168.11.107:3000</code></li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const LOCAL_SERVER = 'http://192.168.11.107:3000';
+        const statusBox = document.getElementById('statusBox');
+        const actionBox = document.getElementById('actionBox');
+
+        // Check if local server is accessible
+        async function checkLocalServer() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+                const response = await fetch(`${LOCAL_SERVER}/health`, {
+                    signal: controller.signal,
+                    mode: 'no-cors' // This will always succeed but we can't read response
+                });
+
+                clearTimeout(timeoutId);
+
+                // If we got here without error, server is likely accessible
+                serverFound();
+            } catch (error) {
+                // Server not accessible
+                serverNotFound();
+            }
+        }
+
+        function serverFound() {
+            statusBox.className = 'status found';
+            statusBox.innerHTML = `
+                <i class="fas fa-check-circle" style="font-size: 48px; color: #059669;"></i>
+                <p style="margin-top: 15px;"><strong>✅ Local server found!</strong></p>
+                <p>Redirecting in 3 seconds...</p>
+            `;
+
+            actionBox.innerHTML = `
+                <a href="${LOCAL_SERVER}" class="btn">
+                    <i class="fas fa-external-link-alt"></i> Open Notes Manager Now
+                </a>
+            `;
+
+            // Auto redirect after 3 seconds
+            setTimeout(() => {
+                window.location.href = LOCAL_SERVER;
+            }, 3000);
+        }
+
+        function serverNotFound() {
+            statusBox.className = 'status notfound';
+            statusBox.innerHTML = `
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc2626;"></i>
+                <p style="margin-top: 15px;"><strong>⚠️ Local server not accessible</strong></p>
+                <p>Make sure server is running and you're on the same WiFi</p>
+            `;
+
+            actionBox.innerHTML = `
+                <button onclick="checkLocalServer()" class="btn">
+                    <i class="fas fa-sync"></i> Try Again
+                </button>
+                <a href="${LOCAL_SERVER}" class="btn" style="background: #64748b;">
+                    <i class="fas fa-external-link-alt"></i> Open Anyway
+                </a>
+            `;
+        }
+
+        // Try to detect and redirect
+        window.addEventListener('load', () => {
+            // First try: just redirect and see if it works
+            // (Works better on mobile where fetch might be blocked)
+            const img = new Image();
+            img.onload = serverFound;
+            img.onerror = () => {
+                // Fallback to fetch check
+                checkLocalServer();
+            };
+            // Try to load favicon or check endpoint
+            img.src = `${LOCAL_SERVER}/favicon.ico?t=${Date.now()}`;
+        });
+    </script>
+</body>
+
+</html>
