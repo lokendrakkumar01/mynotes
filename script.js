@@ -107,6 +107,9 @@ function setupEventListeners() {
     // GitHub login
     githubLoginBtn.addEventListener('click', handleGitHubLogin);
 
+    // Google login
+    googleLoginBtn.addEventListener('click', handleGoogleLogin);
+
     // File upload
     uploadArea.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleFileUpload);
