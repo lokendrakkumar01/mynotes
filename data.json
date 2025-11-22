@@ -1,0 +1,14 @@
+{
+  "users": [
+    {
+      "_id": "1763788408354",
+      "username": "rada66",
+      "email": "lokendrafranklin77777@gmail.com",
+      "password": "$2a$10$Gv4eaz28CfdxovoxpE9QN.POGBlLIeiEGQZh1pOEHvXVDl//Aqvp2",
+      "profileImage": null,
+      "createdAt": "2025-11-22T05:13:28.355Z"
+    }
+  ],
+  "notes": [],
+  "files": []
+}

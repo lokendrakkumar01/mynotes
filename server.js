@@ -146,6 +146,8 @@ const verifyToken = (req, res, next) => {
   try {
     const verified = jwt.verify(token, process.env.JWT_SECRET);
     req.userId = verified.userId;
+    req.user = data.users.find(u => u._id === req.userId);
+    if (!req.user) return res.status(401).json({ error: 'User not found' });
     next();
   } catch (error) {
     res.status(400).json({ error: 'Invalid token' });
