@@ -392,6 +392,8 @@ app.post('/auth/logout', (req, res) => {
   res.json({ message: 'Logged out successfully' });
 });
 
+const serverIP = getServerIP();
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT} and accessible from all network interfaces`);
   console.log(`Local access: http://localhost:${PORT}`);
