@@ -53,21 +53,103 @@ let currentSearch = '';
 let profileImageData = null;
 let authToken = localStorage.getItem('authToken') || null;
 
-// API URL
-const API_BASE_URL = window.location.protocol === 'file:'
-    ? 'http://localhost:3000/api'
-    : `${window.location.protocol}//${window.location.hostname}:3000/api`;
+// Detect if running on GitHub Pages
+const isGitHubPages = window.location.hostname.includes('github.io');
 
-console.log('API Base URL:', API_BASE_URL);
+// API URL
+const API_BASE_URL = isGitHubPages
+    ? null // No backend on GitHub Pages
+    : (window.location.protocol === 'file:'
+        ? 'http://localhost:3000/api'
+        : `${window.location.protocol}//${window.location.hostname}:3000/api`);
+
+console.log('Environment:', isGitHubPages ? 'GitHub Pages' : 'Local');
+console.log('API Base URL:', API_BASE_URL || 'N/A');
 
 // Initialize
 function init() {
     console.log('Initializing app...');
+
+    // Check if on GitHub Pages
+    if (isGitHubPages) {
+        showGitHubPagesMessage();
+        hideLoader();
+        return;
+    }
+
     setupEventListeners();
     loadThemePreference();
     checkLoginStatus();
     testConnection();
     hideLoader();
+}
+
+function showGitHubPagesMessage() {
+    if (loader) loader.style.display = 'none';
+    if (loginContainer) {
+        loginContainer.innerHTML = `
+            <div class="login-form" style="max-width: 600px; text-align: center;">
+                <h2 style="color: #ef4444; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    GitHub Pages Demo Only
+                </h2>
+                <div style="text-align: left; background: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <p style="margin-bottom: 15px;">
+                        <strong>⚠️ This application requires a backend server to function.</strong>
+                    </p>
+                    <p style="margin-bottom: 15px;">
+                        GitHub Pages can only host static files (HTML, CSS, JavaScript) and cannot run the Node.js server needed for:
+                    </p>
+                    <ul style="margin-left: 20px; margin-bottom: 15px;">
+                        <li>User authentication (login/register)</li>
+                        <li>File storage and retrieval</li>
+                        <li>Database operations</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #e0f2fe; padding: 20px; border-radius: 12px; border-left: 4px solid #0284c7;">
+                    <h3 style="color: #0284c7; margin-bottom: 15px;">
+                        <i class="fas fa-rocket"></i> How to Run Locally:
+                    </h3>
+                    <ol style="text-align: left; margin-left: 20px; line-height: 1.8;">
+                        <li><strong>Clone the repository:</strong><br>
+                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
+                                git clone [your-repo-url]
+                            </code>
+                        </li>
+                        <li><strong>Install dependencies:</strong><br>
+                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
+                                npm install
+                            </code>
+                        </li>
+                        <li><strong>Start the server:</strong><br>
+                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
+                                node server.js
+                            </code>
+                        </li>
+                        <li><strong>Open in browser:</strong><br>
+                            <code style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px;">
+                                http://localhost:3000
+                            </code>
+                        </li>
+                    </ol>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <a href="https://github.com/[your-username]/mynotes" 
+                       class="btn btn-primary" 
+                       style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
+                        <i class="fab fa-github"></i> View on GitHub
+                    </a>
+                </div>
+                
+                <p style="margin-top: 20px; color: #64748b; font-size: 14px;">
+                    💡 For a fully functional demo, please run the application locally.
+                </p>
+            </div>
+        `;
+        loginContainer.style.display = 'flex';
+    }
 }
 
 function hideLoader() {

@@ -75,6 +75,14 @@
       "email": "test6@example.com",
       "password": "$2a$10$QELkfO11ilTLuPzhB56ttuuqiFo5NZZRvbHDp.toZxuoHobP5rDc2",
       "createdAt": "2025-11-22T07:27:55.746Z"
+    },
+    {
+      "id": "1763807944701",
+      "username": "t443",
+      "email": "lokendraf@gmail.com",
+      "password": "$2a$10$NLN.JqfEicy2FaWimQChLuT0WeUdZaSKbKaq6T5R45197uVDtyzyy",
+      "profileImage": null,
+      "createdAt": "2025-11-22T10:39:04.702Z"
     }
   ],
   "notes": [
