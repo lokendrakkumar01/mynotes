@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes Manager - Firebase Edition</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+</head>
+
+<body>
+    <!-- Loader -->
+    <div class="loader" id="loader">
+        <div class="loader-spinner"></div>
+        <p>Loading Notes Manager...</p>
+    </div>
+
+    <!-- Connection Status -->
+    <div class="connection-status" id="connectionStatus">
+        <i class="fas fa-wifi"></i>
+        <span id="connectionText">Checking connection...</span>
+    </div>
+
+    <!-- Login Container -->
+    <div class="login-container" id="loginContainer">
+        <div class="login-form" id="loginFormContainer">
+            <h2><i class="fas fa-file-alt"></i> Notes Manager - Cloud Edition</h2>
+
+            <!-- Google Login -->
+            <button id="googleLoginBtn" class="btn btn-primary"
+                style="width: 100%; margin-bottom: 20px; background: #4285f4;">
+                <i class="fab fa-google"></i> Continue with Google
+            </button>
+
+            <div style="text-align: center; margin: 20px 0; color: var(--text-light);">
+                <span>────── OR ──────</span>
+            </div>
+
+            <!-- Email Login -->
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" class="form-control" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password"
+                        required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-sign-in-alt"></i> Login with Email
+                </button>
+            </form>
+
+            <div class="register-link">
+                Don't have an account? <a href="#" id="registerLink">Register here</a>
+            </div>
+        </div>
+
+        <!-- Registration Form -->
+        <div class="register-form" id="registerFormContainer" style="display: none;">
+            <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+
+            <!-- Google Signup -->
+            <button id="googleSignupBtn" class="btn btn-primary"
+                style="width: 100%; margin-bottom: 20px; background: #4285f4;">
+                <i class="fab fa-google"></i> Sign up with Google
+            </button>
+
+            <div style="text-align: center; margin: 20px 0; color: var(--text-light);">
+                <span>────── OR ──────</span>
+            </div>
+
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="regEmail">Email Address</label>
+                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" class="form-control"
+                        placeholder="Create a password (min 6 characters)" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="regConfirmPassword">Confirm Password</label>
+                    <input type="password" id="regConfirmPassword" class="form-control"
+                        placeholder="Confirm your password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
+            </form>
+            <div class="login-link">
+                Already have an account? <a href="#" id="loginLink">Login here</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container" id="appContainer">
+        <div class="container">
+            <header>
+                <div class="logo">
+                    <i class="fas fa-cloud"></i>
+                    <span>NOTES MANAGER - CLOUD</span>
+                </div>
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <img id="headerProfileImage" alt="User profile" style="display: none;">
+                        <div class="profile-placeholder" id="headerProfilePlaceholder">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name" id="userName">User</div>
+                        <div class="user-email" id="userEmail">user@example.com</div>
+                    </div>
+                    <button class="contact-btn" id="contactBtn">
+                        <i class="fas fa-envelope"></i> Contact
+                    </button>
+                    <button class="logout-btn" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+                        <div class="toggle-circle"></div>
+                    </button>
+                </div>
+            </header>
+
+            <section class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <h3>Upload to Cloud</h3>
+                    <p>Drag & drop files or click to browse</p>
+                    <button class="upload-btn">
+                        <i class="fas fa-plus"></i> Select Files
+                    </button>
+                    <input type="file" id="fileInput" multiple
+                        accept="image/*,video/*,application/pdf,text/*,.doc,.docx" style="display: none;">
+                </div>
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress" id="progressBar"></div>
+                    </div>
+                    <p id="progressText">Uploading...</p>
+                </div>
+            </section>
+
+            <section class="search-filter-section">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search files...">
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="pdf">PDF</button>
+                    <button class="filter-btn" data-filter="doc">DOC</button>
+                    <button class="filter-btn" data-filter="txt">TXT</button>
+                    <button class="filter-btn" data-filter="img">Images</button>
+                    <button class="filter-btn" data-filter="video">Videos</button>
+                </div>
+            </section>
+
+            <section class="files-container">
+                <div class="files-grid" id="filesGrid"></div>
+            </section>
+
+            <!-- Preview Modal -->
+            <div class="preview-modal" id="previewModal">
+                <div class="preview-content">
+                    <button class="close-preview" id="closePreview">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h3 id="previewTitle">File Preview</h3>
+                    <div class="preview-body" id="previewBody"></div>
+                </div>
+            </div>
+
+            <!-- Contact Modal -->
+            <div class="contact-modal" id="contactModal">
+                <div class="contact-content">
+                    <button class="close-contact" id="closeContact">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h2><i class="fas fa-envelope"></i> Contact Us</h2>
+                    <p>Questions or feedback? Send us a message!</p>
+
+                    <form class="contact-form" id="contactForm">
+                        <div class="form-group">
+                            <label for="contactSubject">Subject</label>
+                            <input type="text" id="contactSubject" class="form-control" placeholder="Subject" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="contactMessage">Message</label>
+                            <textarea id="contactMessage" class="form-control" rows="5" placeholder="Your message"
+                                required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <i class="fas fa-paper-plane"></i> Send Message
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <i class="fas fa-check-circle"></i>
+        <span id="notificationText">Success!</span>
+    </div>
+
+    <!-- Firebase Config -->
+    <script src="firebase-config.js"></script>
+    <!-- Main App Script -->
+    <script src="firebase-app.js"></script>
+</body>
+
+</html>
