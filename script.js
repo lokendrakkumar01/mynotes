@@ -66,6 +66,7 @@ function init() {
     checkLoginStatus();
     setupEventListeners();
     loadThemePreference();
+    testConnection();
 
 }
 
@@ -73,8 +74,15 @@ function init() {
 function checkLoginStatus() {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
-        currentUser = JSON.parse(savedUser);
-        showApp();
+        try {
+            currentUser = JSON.parse(savedUser);
+            showApp();
+        } catch (error) {
+            console.error('Error parsing saved user:', error);
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('authToken');
+            showLogin();
+        }
     } else {
         showLogin();
     }
@@ -241,7 +249,7 @@ async function handleLogin(e) {
         }
     } catch (error) {
         console.error('Login error:', error);
-        showNotification('Network error. Please try again.', true);
+        showNotification(`Login failed: ${error.message}. Check console for details.`, true);
     }
 }
 
@@ -294,7 +302,7 @@ async function handleRegister(e) {
         }
     } catch (error) {
         console.error('Registration error:', error);
-        showNotification('Network error. Please try again.', true);
+        showNotification(`Registration failed: ${error.message}. Check console for details.`, true);
     }
 }
 
@@ -778,6 +786,7 @@ async function loadUserFiles() {
             renderFiles();
         } else {
             console.error('Failed to load files');
+            showNotification('Failed to load your files. Please try refreshing.', true);
         }
     } catch (error) {
         console.error('Error loading files:', error);
@@ -787,6 +796,25 @@ async function loadUserFiles() {
 
 
 
+
+// Test server connection
+async function testConnection() {
+    try {
+        console.log(`Testing connection to ${API_BASE_URL}...`);
+        // Try to fetch the root URL (remove /api)
+        const serverUrl = API_BASE_URL.replace('/api', '');
+        const response = await fetch(serverUrl + '/');
+
+        if (response.ok) {
+            console.log('Server connection successful');
+        } else {
+            console.warn('Server reachable but returned status:', response.status);
+        }
+    } catch (error) {
+        console.error('Server connection failed:', error);
+        showNotification(`Cannot connect to server at ${API_BASE_URL}. Is "node server.js" running? Error: ${error.message}`, true);
+    }
+}
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);

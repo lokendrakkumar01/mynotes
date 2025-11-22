@@ -51,10 +51,23 @@ let data = { users: [], notes: [], files: [] };
 function loadData() {
   console.log('Loading data from:', dataFile);
   if (fs.existsSync(dataFile)) {
-    data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    console.log('Data loaded successfully:', data);
+    try {
+      const fileContent = fs.readFileSync(dataFile, 'utf8');
+      data = JSON.parse(fileContent);
+      console.log('Data loaded successfully');
+    } catch (error) {
+      console.error('Error parsing data.json:', error);
+      // Backup corrupt file
+      const backupFile = dataFile + '.bak.' + Date.now();
+      fs.copyFileSync(dataFile, backupFile);
+      console.log(`Corrupt data file backed up to ${backupFile}`);
+      // Initialize with empty data
+      data = { users: [], notes: [], files: [] };
+      console.log('Initialized with empty data structure');
+    }
   } else {
     console.log('Data file does not exist, initializing empty data');
+    data = { users: [], notes: [], files: [] };
   }
 }
 
