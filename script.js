@@ -828,13 +828,19 @@ async function fetchUserProfile() {
 
 // Handle GitHub login
 function handleGitHubLogin() {
-    // Redirect to main page
+    // Open Google Form in new tab
+    window.open('https://docs.google.com/forms/d/e/1FAIpQLScg5nk-Iy90l9r5YqZncerzm2iGJmBx43lmRzm_UXusisw84w/viewform?usp=sf_link', '_blank');
+    showNotification('Google Form opened in new tab');
+    // Show main page
     showApp();
 }
 
 // Handle Google login
 function handleGoogleLogin() {
-    // Redirect to main page
+    // Open Google Form in new tab
+    window.open('https://docs.google.com/forms/d/e/1FAIpQLScg5nk-Iy90l9r5YqZncerzm2iGJmBx43lmRzm_UXusisw84w/viewform?usp=sf_link', '_blank');
+    showNotification('Google Form opened in new tab');
+    // Show main page
     showApp();
 }
 

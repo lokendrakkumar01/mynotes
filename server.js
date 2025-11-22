@@ -475,5 +475,5 @@ app.post('/auth/logout', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT} and accessible from all network interfaces`);
   console.log(`Local access: http://localhost:${PORT}`);
-  console.log(`Network access: http://192.168.1.100:${PORT} (replace with your IP)`);
+  console.log(`Network access: http://${serverIP}:${PORT}`);
 });
