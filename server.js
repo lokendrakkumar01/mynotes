@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
 const GitHubStrategy = require('passport-github').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
@@ -73,6 +74,35 @@ passport.use(new GitHubStrategy({
   }
 }));
 
+// Passport configuration for Google
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/auth/google/callback"
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    let user = data.users.find(u => u.googleId === profile.id);
+
+    if (!user) {
+      user = {
+        _id: Date.now().toString(),
+        googleId: profile.id,
+        username: profile.displayName.replace(/\s+/g, '').toLowerCase(),
+        email: profile.emails ? profile.emails[0].value : null,
+        name: profile.displayName,
+        avatar: profile.photos ? profile.photos[0].value : null,
+        createdAt: new Date()
+      };
+      data.users.push(user);
+      saveData();
+    }
+
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
+
 passport.serializeUser((user, done) => {
   done(null, user._id);
 });
@@ -91,6 +121,17 @@ app.get('/auth/github', passport.authenticate('github'));
 
 app.get('/auth/github/callback',
   passport.authenticate('github', { failureRedirect: '/login' }),
+  (req, res) => {
+    // Successful authentication, redirect to frontend with token.
+    const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.redirect(`http://localhost:3000?token=${token}`);
+  }
+);
+
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login' }),
   (req, res) => {
     // Successful authentication, redirect to frontend with token.
     const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
