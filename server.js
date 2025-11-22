@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
-const GitHubStrategy = require('passport-github2').Strategy;
+const GitHubStrategy = require('passport-github').Strategy;
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
@@ -18,7 +18,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(addUserToReq);
 
 // Serve static files
 app.use(express.static(path.join(__dirname)));
