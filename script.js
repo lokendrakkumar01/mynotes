@@ -54,8 +54,8 @@ let currentSearch = '';
 let profileImageData = null;
 let authToken = localStorage.getItem('authToken') || null;
 
-// API base URL
-const API_BASE_URL = 'http://localhost:3000/api';
+// API base URL - dynamically set based on current host
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
 
 // Initialize the app
 function init() {

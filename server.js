@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-  origin: true, // Allow all origins for cross-device access
+  origin: '*', // Allow all origins for cross-device access
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
@@ -472,6 +472,8 @@ app.post('/auth/logout', (req, res) => {
   res.json({ message: 'Logged out successfully' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT} and accessible from all network interfaces`);
+  console.log(`Local access: http://localhost:${PORT}`);
+  console.log(`Network access: http://192.168.1.100:${PORT} (replace with your IP)`);
 });
