@@ -831,5 +831,10 @@ function handleGitHubLogin() {
     window.location.href = '/auth/github';
 }
 
+// Handle Google login
+function handleGoogleLogin() {
+    window.location.href = '/auth/google';
+}
+
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
