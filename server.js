@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const passport = require('passport');
+
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -31,7 +31,7 @@ app.use(express.json({ limit: '50mb' })); // Increase limit for file uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Initialize Passport
-app.use(passport.initialize());
+
 
 // Serve static files
 app.use(express.static(path.join(__dirname)));
@@ -81,14 +81,7 @@ function getServerIP() {
   }
   return 'localhost'; // fallback
 }
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = data.users.find(u => u._id === id);
-    done(null, user);
-  } catch (error) {
-    done(error, null);
-  }
-});
+
 
 // Routes
 

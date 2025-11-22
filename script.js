@@ -55,7 +55,9 @@ let profileImageData = null;
 let authToken = localStorage.getItem('authToken') || null;
 
 // API base URL - dynamically set based on current host
-const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
+const API_BASE_URL = window.location.protocol === 'file:'
+    ? 'http://localhost:3000/api'
+    : `${window.location.protocol}//${window.location.hostname}:3000/api`;
 
 // Initialize the app
 function init() {
@@ -191,7 +193,7 @@ function handleProfileImageUpload(e) {
     }
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         profileImageData = e.target.result;
         profilePlaceholder.style.display = 'none';
         profileImage.src = profileImageData;
@@ -560,7 +562,7 @@ function createFileCard(file) {
 
 // Get appropriate icon for file type
 function getFileIconClass(type) {
-    switch(type) {
+    switch (type) {
         case 'pdf': return 'fas fa-file-pdf';
         case 'doc': return 'fas fa-file-word';
         case 'txt': return 'fas fa-file-alt';
