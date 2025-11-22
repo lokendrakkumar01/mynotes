@@ -828,12 +828,14 @@ async function fetchUserProfile() {
 
 // Handle GitHub login
 function handleGitHubLogin() {
-    window.location.href = `${window.location.protocol}//${window.location.hostname}:3000/auth/github`;
+    // Redirect to main page
+    showApp();
 }
 
 // Handle Google login
 function handleGoogleLogin() {
-    window.location.href = `${window.location.protocol}//${window.location.hostname}:3000/auth/google`;
+    // Redirect to main page
+    showApp();
 }
 
 // Initialize the app when DOM is loaded
