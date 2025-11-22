@@ -231,7 +231,9 @@ async function handleLogin(e) {
             currentUser = data.user;
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            console.log('Login successful, user:', currentUser);
             loadUserFiles();
+            console.log('Calling showApp()');
             showApp();
             showNotification(`Welcome back, ${username}!`);
         } else {
@@ -282,7 +284,9 @@ async function handleRegister(e) {
             currentUser = data.user;
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            console.log('Registration successful, user:', currentUser);
             loadUserFiles();
+            console.log('Calling showApp()');
             showApp();
             showNotification(`Account created successfully! Welcome, ${username}!`);
         } else {
@@ -354,25 +358,38 @@ function showLogin() {
 
 // Show main app
 function showApp() {
-    loginContainer.style.display = 'none';
-    appContainer.style.display = 'block';
+    console.log('Inside showApp()');
+    try {
+        if (!currentUser) {
+            console.error('currentUser is null in showApp');
+            showLogin();
+            return;
+        }
 
-    // Update user info
-    userName.textContent = currentUser.username;
-    userEmail.textContent = currentUser.email;
+        loginContainer.style.display = 'none';
+        appContainer.style.display = 'block';
 
-    // Update profile image
-    if (currentUser.profileImage) {
-        headerProfilePlaceholder.style.display = 'none';
-        headerProfileImage.src = currentUser.profileImage;
-        headerProfileImage.style.display = 'block';
-    } else {
-        headerProfilePlaceholder.style.display = 'flex';
-        headerProfileImage.style.display = 'none';
-        headerProfilePlaceholder.innerHTML = `<i class="fas fa-user"></i>`;
+        // Update user info
+        userName.textContent = currentUser.username;
+        userEmail.textContent = currentUser.email;
+
+        // Update profile image
+        if (currentUser.profileImage) {
+            headerProfilePlaceholder.style.display = 'none';
+            headerProfileImage.src = currentUser.profileImage;
+            headerProfileImage.style.display = 'block';
+        } else {
+            headerProfilePlaceholder.style.display = 'flex';
+            headerProfileImage.style.display = 'none';
+            headerProfilePlaceholder.innerHTML = `<i class="fas fa-user"></i>`;
+        }
+
+        renderFiles();
+        console.log('showApp completed successfully');
+    } catch (error) {
+        console.error('Error in showApp:', error);
+        showNotification('Error loading application interface', true);
     }
-
-    renderFiles();
 }
 
 // Toggle between dark and light mode
