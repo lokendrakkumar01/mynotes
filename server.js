@@ -25,6 +25,9 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' })); // Increase limit for file uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Initialize Passport
+app.use(passport.initialize());
+
 // Serve static files
 app.use(express.static(path.join(__dirname)));
 app.get('/', (req, res) => {
@@ -53,12 +56,29 @@ function saveData() {
 
 loadData();
 
+// Get server IP for dynamic callback URLs
+function getServerIP() {
+  const os = require('os');
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost'; // fallback
+}
+
+const serverIP = getServerIP();
+const serverURL = `http://${serverIP}:3000`;
+
 // Passport configuration for GitHub (only if credentials are provided)
 if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:3000/auth/github/callback"
+    callbackURL: process.env.GITHUB_CALLBACK_URL || `${serverURL}/auth/github/callback`
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       let user = data.users.find(u => u.githubId === profile.id);
@@ -86,10 +106,10 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 
 // Passport configuration for Google (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use('google', new GoogleStrategy({
+  passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/auth/google/callback"
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || `${serverURL}/auth/google/callback`
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       let user = data.users.find(u => u.googleId === profile.id);
@@ -137,7 +157,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
     (req, res) => {
       // Successful authentication, redirect to frontend with token.
       const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
-      res.redirect(`http://localhost:3000?token=${token}`);
+      res.redirect(`${serverURL}?token=${token}`);
     }
   );
 }
@@ -150,7 +170,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     (req, res) => {
       // Successful authentication, redirect to frontend with token.
       const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
-      res.redirect(`http://localhost:3000?token=${token}`);
+      res.redirect(`${serverURL}?token=${token}`);
     }
   );
 }
