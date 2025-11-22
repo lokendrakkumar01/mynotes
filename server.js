@@ -4,7 +4,6 @@ const passport = require('passport');
 const GitHubStrategy = require('passport-github2').Strategy;
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { MongoClient, ObjectId } = require('mongodb');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -19,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(addUserToReq);
 
 // Serve static files
 app.use(express.static(path.join(__dirname)));
@@ -29,23 +29,21 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// MongoDB connection
-const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
-const dbName = 'notesManager';
-let db;
+// Local JSON storage
+const dataFile = path.join(__dirname, 'data.json');
+let data = { users: [], notes: [], files: [] };
 
-async function connectToMongo() {
-  try {
-    const client = new MongoClient(mongoUri);
-    await client.connect();
-    db = client.db(dbName);
-    console.log('Connected to MongoDB');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
+function loadData() {
+  if (fs.existsSync(dataFile)) {
+    data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
   }
 }
 
-connectToMongo();
+function saveData() {
+  fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
+}
+
+loadData();
 
 // Passport configuration for GitHub
 passport.use(new GitHubStrategy({
@@ -54,11 +52,11 @@ passport.use(new GitHubStrategy({
   callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:3000/auth/github/callback"
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    const usersCollection = db.collection('users');
-    let user = await usersCollection.findOne({ githubId: profile.id });
+    let user = data.users.find(u => u.githubId === profile.id);
 
     if (!user) {
       user = {
+        _id: Date.now().toString(),
         githubId: profile.id,
         username: profile.username,
         email: profile.emails ? profile.emails[0].value : null,
@@ -66,7 +64,8 @@ passport.use(new GitHubStrategy({
         avatar: profile.photos ? profile.photos[0].value : null,
         createdAt: new Date()
       };
-      await usersCollection.insertOne(user);
+      data.users.push(user);
+      saveData();
     }
 
     return done(null, user);
@@ -81,8 +80,7 @@ passport.serializeUser((user, done) => {
 
 passport.deserializeUser(async (id, done) => {
   try {
-    const usersCollection = db.collection('users');
-    const user = await usersCollection.findOne({ _id: id });
+    const user = data.users.find(u => u._id === id);
     done(null, user);
   } catch (error) {
     done(error, null);
@@ -105,22 +103,23 @@ app.get('/auth/github/callback',
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password, profileImage } = req.body;
   try {
-    const usersCollection = db.collection('users');
-    const existingUser = await usersCollection.findOne({ $or: [{ username }, { email }] });
+    const existingUser = data.users.find(u => u.username === username || u.email === email);
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = {
+      _id: Date.now().toString(),
       username,
       email,
       password: hashedPassword,
       profileImage,
       createdAt: new Date()
     };
-    const result = await usersCollection.insertOne(user);
-    const token = jwt.sign({ userId: result.insertedId }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.status(201).json({ token, user: { _id: result.insertedId, username, email, profileImage } });
+    data.users.push(user);
+    saveData();
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.status(201).json({ token, user: { _id: user._id, username, email, profileImage } });
   } catch (error) {
     res.status(500).json({ message: 'Registration failed' });
   }
@@ -129,8 +128,7 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    const usersCollection = db.collection('users');
-    const user = await usersCollection.findOne({ username });
+    const user = data.users.find(u => u.username === username);
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
@@ -158,8 +156,7 @@ const verifyToken = (req, res, next) => {
 // Notes routes
 app.get('/api/notes', verifyToken, async (req, res) => {
   try {
-    const notesCollection = db.collection('notes');
-    const notes = await notesCollection.find({ userId: req.userId }).toArray();
+    const notes = data.notes.filter(n => n.userId === req.userId);
     res.json(notes);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch notes' });
@@ -168,10 +165,10 @@ app.get('/api/notes', verifyToken, async (req, res) => {
 
 app.post('/api/notes', verifyToken, async (req, res) => {
   try {
-    const notesCollection = db.collection('notes');
-    const note = { ...req.body, userId: req.userId, createdAt: new Date() };
-    const result = await notesCollection.insertOne(note);
-    res.status(201).json({ ...note, _id: result.insertedId });
+    const note = { ...req.body, userId: req.userId, _id: Date.now().toString(), createdAt: new Date() };
+    data.notes.push(note);
+    saveData();
+    res.status(201).json(note);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create note' });
   }
@@ -179,16 +176,13 @@ app.post('/api/notes', verifyToken, async (req, res) => {
 
 app.put('/api/notes/:id', verifyToken, async (req, res) => {
   try {
-    const notesCollection = db.collection('notes');
     const { id } = req.params;
-    const updateData = { ...req.body, updatedAt: new Date() };
-    const result = await notesCollection.updateOne(
-      { _id: new ObjectId(id), userId: req.userId },
-      { $set: updateData }
-    );
-    if (result.matchedCount === 0) {
+    const noteIndex = data.notes.findIndex(n => n._id === id && n.userId === req.userId);
+    if (noteIndex === -1) {
       return res.status(404).json({ error: 'Note not found' });
     }
+    data.notes[noteIndex] = { ...data.notes[noteIndex], ...req.body, updatedAt: new Date() };
+    saveData();
     res.json({ message: 'Note updated successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update note' });
@@ -197,12 +191,13 @@ app.put('/api/notes/:id', verifyToken, async (req, res) => {
 
 app.delete('/api/notes/:id', verifyToken, async (req, res) => {
   try {
-    const notesCollection = db.collection('notes');
     const { id } = req.params;
-    const result = await notesCollection.deleteOne({ _id: new ObjectId(id), userId: req.userId });
-    if (result.deletedCount === 0) {
+    const noteIndex = data.notes.findIndex(n => n._id === id && n.userId === req.userId);
+    if (noteIndex === -1) {
       return res.status(404).json({ error: 'Note not found' });
     }
+    data.notes.splice(noteIndex, 1);
+    saveData();
     res.json({ message: 'Note deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete note' });
@@ -237,17 +232,20 @@ app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => 
     return res.status(400).json({ error: 'No file uploaded' });
   }
   try {
-    const filesCollection = db.collection('files');
     const fileDoc = {
+      _id: Date.now().toString(),
       name: req.file.originalname,
       type: getFileType(req.file.mimetype),
       size: req.file.size,
       path: req.file.path,
       userId: req.userId,
+      uploader: req.user.username || 'Unknown',
+      uploaderEmail: req.user.email || 'Unknown',
       uploadDate: new Date()
     };
-    const result = await filesCollection.insertOne(fileDoc);
-    res.json({ message: 'File uploaded successfully', file: { ...fileDoc, _id: result.insertedId } });
+    data.files.push(fileDoc);
+    saveData();
+    res.json({ message: 'File uploaded successfully', file: fileDoc });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload file' });
@@ -257,8 +255,7 @@ app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => 
 // Get user files
 app.get('/api/files', verifyToken, async (req, res) => {
   try {
-    const filesCollection = db.collection('files');
-    const files = await filesCollection.find({ userId: req.userId }).toArray();
+    const files = data.files.filter(f => f.userId === req.userId);
     res.json({ files });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch files' });
@@ -268,8 +265,7 @@ app.get('/api/files', verifyToken, async (req, res) => {
 // Download file
 app.get('/api/files/:id/download', verifyToken, async (req, res) => {
   try {
-    const filesCollection = db.collection('files');
-    const file = await filesCollection.findOne({ _id: new ObjectId(req.params.id), userId: req.userId });
+    const file = data.files.find(f => f._id === req.params.id && f.userId === req.userId);
     if (!file) {
       return res.status(404).json({ error: 'File not found' });
     }
@@ -282,15 +278,13 @@ app.get('/api/files/:id/download', verifyToken, async (req, res) => {
 // Rename file
 app.put('/api/files/:id/rename', verifyToken, async (req, res) => {
   try {
-    const filesCollection = db.collection('files');
     const { newName } = req.body;
-    const result = await filesCollection.updateOne(
-      { _id: new ObjectId(req.params.id), userId: req.userId },
-      { $set: { name: newName } }
-    );
-    if (result.matchedCount === 0) {
+    const fileIndex = data.files.findIndex(f => f._id === req.params.id && f.userId === req.userId);
+    if (fileIndex === -1) {
       return res.status(404).json({ error: 'File not found' });
     }
+    data.files[fileIndex].name = newName;
+    saveData();
     res.json({ message: 'File renamed successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to rename file' });
@@ -300,16 +294,17 @@ app.put('/api/files/:id/rename', verifyToken, async (req, res) => {
 // Delete file
 app.delete('/api/files/:id', verifyToken, async (req, res) => {
   try {
-    const filesCollection = db.collection('files');
-    const file = await filesCollection.findOne({ _id: new ObjectId(req.params.id), userId: req.userId });
-    if (!file) {
+    const fileIndex = data.files.findIndex(f => f._id === req.params.id && f.userId === req.userId);
+    if (fileIndex === -1) {
       return res.status(404).json({ error: 'File not found' });
     }
+    const file = data.files[fileIndex];
     // Delete file from disk
     fs.unlink(file.path, (err) => {
       if (err) console.error('Error deleting file from disk:', err);
     });
-    await filesCollection.deleteOne({ _id: new ObjectId(req.params.id), userId: req.userId });
+    data.files.splice(fileIndex, 1);
+    saveData();
     res.json({ message: 'File deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete file' });
@@ -319,8 +314,7 @@ app.delete('/api/files/:id', verifyToken, async (req, res) => {
 // Get user profile
 app.get('/api/profile', verifyToken, async (req, res) => {
   try {
-    const usersCollection = db.collection('users');
-    const user = await usersCollection.findOne({ _id: req.userId });
+    const user = data.users.find(u => u._id === req.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
