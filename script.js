@@ -59,6 +59,8 @@ const API_BASE_URL = window.location.protocol === 'file:'
     ? 'http://localhost:3000/api'
     : `${window.location.protocol}//${window.location.hostname}:3000/api`;
 
+console.log('API Base URL:', API_BASE_URL);
+
 // Initialize the app
 function init() {
     checkLoginStatus();

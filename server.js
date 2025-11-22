@@ -23,7 +23,6 @@ if (!fs.existsSync(uploadDir)) {
 // Middleware
 app.use(cors({
   origin: '*', // Allow all origins for cross-device access
-  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
@@ -176,7 +175,7 @@ const verifyToken = (req, res, next) => {
   if (!token) return res.status(401).json({ error: 'Access denied' });
 
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    const verified = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
     req.userId = verified.userId;
     req.user = data.users.find(u => u._id === req.userId);
     if (!req.user) return res.status(401).json({ error: 'User not found' });
