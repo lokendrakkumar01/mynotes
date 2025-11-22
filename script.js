@@ -25,7 +25,7 @@ const userEmail = document.getElementById('userEmail');
 const logoutBtn = document.getElementById('logoutBtn');
 const contactBtn = document.getElementById('contactBtn');
 const themeToggle = document.getElementById('themeToggle');
-const githubLoginBtn = document.getElementById('githubLoginBtn');
+
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 const progressContainer = document.getElementById('progressContainer');
@@ -41,7 +41,7 @@ const previewBody = document.getElementById('previewBody');
 const contactModal = document.getElementById('contactModal');
 const closeContact = document.getElementById('closeContact');
 const contactForm = document.getElementById('contactForm');
-const googleFormBtn = document.getElementById('googleFormBtn');
+
 const notification = document.getElementById('notification');
 const notificationText = document.getElementById('notificationText');
 
@@ -62,7 +62,7 @@ function init() {
     checkLoginStatus();
     setupEventListeners();
     loadThemePreference();
-    checkForTokenInURL();
+
 }
 
 // Check if user is already logged in
@@ -95,20 +95,12 @@ function setupEventListeners() {
     contactBtn.addEventListener('click', () => contactModal.classList.add('active'));
     closeContact.addEventListener('click', () => contactModal.classList.remove('active'));
     contactForm.addEventListener('submit', handleContactForm);
-    googleFormBtn.addEventListener('click', () => {
-        window.open('https://docs.google.com/forms/d/e/1FAIpQLScg5nk-Iy90l9r5YqZncerzm2iGJmBx43lmRzm_UXusisw84w/viewform?usp=sf_link', '_blank');
-        contactModal.classList.remove('active');
-        showNotification('Google Form opened in new tab');
-    });
+
 
     // Theme toggle
     themeToggle.addEventListener('click', toggleTheme);
 
-    // GitHub login
-    githubLoginBtn.addEventListener('click', handleGitHubLogin);
 
-    // Google login
-    googleLoginBtn.addEventListener('click', handleGoogleLogin);
 
     // File upload
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -771,87 +763,9 @@ async function loadUserFiles() {
     }
 }
 
-// Check for token in URL (for GitHub OAuth callback)
-function checkForTokenInURL() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    if (token) {
-        authToken = token;
-        localStorage.setItem('authToken', authToken);
-        // Fetch user profile
-        fetchUserProfile();
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-    }
-}
 
-// Fetch user profile after GitHub login
-async function fetchUserProfile() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/profile`, {
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
-        });
 
-        if (response.ok) {
-            const user = await response.json();
-            currentUser = {
-                _id: user._id,
-                username: user.username,
-                email: user.email,
-                profileImage: user.avatar || user.profileImage
-            };
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            loadUserFiles();
-            showApp();
-            showNotification(`Welcome, ${user.username}!`);
-        } else {
-            showNotification('Failed to fetch user profile', true);
-        }
-    } catch (error) {
-        console.error('Profile fetch error:', error);
-        showNotification('Network error. Please try again.', true);
-    }
-}
 
-// Handle GitHub login
-async function handleGitHubLogin() {
-    const name = prompt('Enter your name for GitHub login:');
-    const email = prompt('Enter your email for GitHub login:');
-
-    if (!name || !email) {
-        showNotification('Name and email are required for OAuth login', true);
-        return;
-    }
-
-    // Store the info temporarily
-    sessionStorage.setItem('oauth_name', name);
-    sessionStorage.setItem('oauth_email', email);
-    sessionStorage.setItem('oauth_provider', 'github');
-
-    // Redirect to GitHub OAuth
-    window.location.href = `${API_BASE_URL.replace('/api', '')}/auth/github`;
-}
-
-// Handle Google login
-async function handleGoogleLogin() {
-    const name = prompt('Enter your name for Google login:');
-    const email = prompt('Enter your email for Google login:');
-
-    if (!name || !email) {
-        showNotification('Name and email are required for OAuth login', true);
-        return;
-    }
-
-    // Store the info temporarily
-    sessionStorage.setItem('oauth_name', name);
-    sessionStorage.setItem('oauth_email', email);
-    sessionStorage.setItem('oauth_provider', 'google');
-
-    // Redirect to Google OAuth
-    window.location.href = `${API_BASE_URL.replace('/api', '')}/auth/google`;
-}
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);

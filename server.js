@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
-const GitHubStrategy = require('passport-github2');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
@@ -82,104 +81,6 @@ function getServerIP() {
   }
   return 'localhost'; // fallback
 }
-
-const serverIP = getServerIP();
-const serverURL = `http://${serverIP}:3000`;
-
-// Passport configuration for GitHub (only if credentials are provided)
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  passport.use(new GitHubStrategy({
-    clientID: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: process.env.GITHUB_CALLBACK_URL || `${serverURL}/auth/github/callback`
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      let user = data.users.find(u => u.githubId === profile.id);
-
-      if (!user) {
-        // Check if we have name and email from sessionStorage
-        const name = sessionStorage.getItem('oauth_name');
-        const email = sessionStorage.getItem('oauth_email');
-
-        if (!name || !email) {
-          return done(null, false, { message: 'Name and email required for OAuth registration' });
-        }
-
-        // Create new user
-        user = {
-          _id: Date.now().toString(),
-          username: name,
-          email: email,
-          githubId: profile.id,
-          profileImage: profile.photos && profile.photos[0] ? profile.photos[0].value : null,
-          createdAt: new Date()
-        };
-
-        data.users.push(user);
-        saveData();
-
-        // Clear session storage
-        sessionStorage.removeItem('oauth_name');
-        sessionStorage.removeItem('oauth_email');
-        sessionStorage.removeItem('oauth_provider');
-      }
-
-      return done(null, user);
-    } catch (error) {
-      return done(error, null);
-    }
-  }));
-}
-
-// Passport configuration for Google (only if credentials are provided)
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || `${serverURL}/auth/google/callback`
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      let user = data.users.find(u => u.googleId === profile.id);
-
-      if (!user) {
-        // Check if we have name and email from sessionStorage
-        const name = sessionStorage.getItem('oauth_name');
-        const email = sessionStorage.getItem('oauth_email');
-
-        if (!name || !email) {
-          return done(null, false, { message: 'Name and email required for OAuth registration' });
-        }
-
-        // Create new user
-        user = {
-          _id: Date.now().toString(),
-          username: name,
-          email: email,
-          googleId: profile.id,
-          profileImage: profile.photos && profile.photos[0] ? profile.photos[0].value : null,
-          createdAt: new Date()
-        };
-
-        data.users.push(user);
-        saveData();
-
-        // Clear session storage
-        sessionStorage.removeItem('oauth_name');
-        sessionStorage.removeItem('oauth_email');
-        sessionStorage.removeItem('oauth_provider');
-      }
-
-      return done(null, user);
-    } catch (error) {
-      return done(error, null);
-    }
-  }));
-}
-
-passport.serializeUser((user, done) => {
-  done(null, user._id);
-});
-
 passport.deserializeUser(async (id, done) => {
   try {
     const user = data.users.find(u => u._id === id);
@@ -190,31 +91,7 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Routes
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  app.get('/auth/github', passport.authenticate('github'));
 
-  app.get('/auth/github/callback',
-    passport.authenticate('github', { failureRedirect: `${serverURL}?error=oauth_failed` }),
-    (req, res) => {
-      // Successful authentication, redirect to frontend with token.
-      const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
-      res.redirect(`${serverURL}?token=${token}`);
-    }
-  );
-}
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
-  app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: `${serverURL}?error=oauth_failed` }),
-    (req, res) => {
-      // Successful authentication, redirect to frontend with token.
-      const token = jwt.sign({ userId: req.user._id }, process.env.JWT_SECRET || 'default-secret', { expiresIn: '1h' });
-      res.redirect(`${serverURL}?token=${token}`);
-    }
-  );
-}
 
 // Local auth routes
 app.post('/api/auth/register', async (req, res) => {
