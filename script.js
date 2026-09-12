@@ -641,7 +641,7 @@ function createNoteCardElement(note) {
     return card;
 }
 
-// File Previews
+// Universal File Previews (PDF, Word, PPT, Excel, Images, Text)
 async function openNotePreview(note) {
     activePreviewNote = note;
     previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
@@ -649,20 +649,45 @@ async function openNotePreview(note) {
 
     const noteUrl = note.url || note.content || `${API_BASE_URL}/files/${note.id}/download`;
 
+    if (!noteUrl) {
+        renderMissingStoragePreviewCard(note);
+        previewModal.classList.add('active');
+        return;
+    }
+
     if (note.type === 'img') {
         const img = document.createElement('img');
         img.src = noteUrl;
         img.alt = note.title;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '500px';
+        img.style.objectFit = 'contain';
+        img.style.borderRadius = '8px';
         previewBody.appendChild(img);
         previewModal.classList.add('active');
         return;
-    } else if (note.type === 'pdf') {
+    }
+
+    if (note.type === 'pdf' || ['doc', 'ppt', 'xls'].includes(note.type)) {
         const iframe = document.createElement('iframe');
-        iframe.src = noteUrl;
+        iframe.style.width = '100%';
+        iframe.style.height = '520px';
+        iframe.style.border = 'none';
+        iframe.style.borderRadius = '8px';
+
+        // Google Docs Viewer embeds remote Cloudinary PDFs & Office docs cleanly without browser CORS / PDF extension errors
+        if (noteUrl.startsWith('http://') || noteUrl.startsWith('https://')) {
+            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(noteUrl)}&embedded=true`;
+        } else {
+            iframe.src = noteUrl;
+        }
+
         previewBody.appendChild(iframe);
         previewModal.classList.add('active');
         return;
-    } else if (note.type === 'txt') {
+    }
+
+    if (note.type === 'txt') {
         try {
             const testRes = await fetch(noteUrl);
             if (testRes.ok) {
