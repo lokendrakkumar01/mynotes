@@ -1,5 +1,5 @@
 // MyNotes Platform Core JavaScript Engine
-// Supports Dual Mode: Firebase Cloud Storage (GitHub Pages & Live Web) + Node.js Express REST API
+// Supports Dual Mode: Express REST API with Cloudinary & MongoDB Atlas + Fallback Cloud Storage
 
 // DOM Elements
 const loader = document.getElementById('loader');
@@ -90,17 +90,26 @@ let pendingDeleteId = null;
 let activePreviewNote = null;
 let authToken = localStorage.getItem('authToken') || null;
 
-// Determine Backend Provider Mode
-const isGitHubPages = window.location.hostname.includes('github.io');
+// Determine Dynamic API Base URL
+function resolveApiBaseUrl() {
+    if (window.location.protocol === 'file:') {
+        return 'http://localhost:3000/api';
+    }
+    const hostname = window.location.hostname;
+    const host = window.location.host;
+
+    if (hostname.includes('github.io')) {
+        return 'https://mynotes-5jj4.onrender.com/api';
+    }
+
+    return `${window.location.protocol}//${host}/api`;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 const isFirebaseAvailable = (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0);
 
-const API_BASE_URL = (window.location.protocol === 'file:'
-    ? 'http://localhost:3000/api'
-    : `${window.location.protocol}//${window.location.hostname}:3000/api`);
-
 console.log('MyNotes Platform Initializing...');
-console.log('Environment:', isGitHubPages ? 'GitHub Pages' : 'Local / Custom Server');
-console.log('Cloud Provider:', isFirebaseAvailable ? 'Firebase Enabled' : 'Local Node API');
+console.log('API Base URL:', API_BASE_URL);
 
 // Initialize Application
 function init() {
@@ -131,7 +140,6 @@ function checkAuthSession() {
             showLoginView();
         }
     } else {
-        // Default to Guest Student browsing mode so students aren't blocked from notes
         currentUser = { id: 'guest-' + Date.now(), username: 'Guest Student', email: 'student@mynotes.edu', isGuest: true };
         showAppView();
     }
@@ -197,7 +205,6 @@ function setupEventListeners() {
     if (closePreview) closePreview.addEventListener('click', () => previewModal.classList.remove('active'));
     if (previewModal) previewModal.addEventListener('click', (e) => { if (e.target === previewModal) previewModal.classList.remove('active'); });
     if (modalDownloadBtn) modalDownloadBtn.addEventListener('click', () => { if (activePreviewNote) downloadNoteFile(activePreviewNote); });
-
     if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', () => deleteConfirmModal.classList.remove('active'));
     if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', executeNoteDeletion);
 }
@@ -375,108 +382,53 @@ async function processFileUploads() {
 
     progressContainer.style.display = 'block';
     progressBar.style.width = '10%';
-    progressText.textContent = 'Uploading notes to shared storage...';
+    progressText.textContent = 'Uploading notes to Cloud (Cloudinary & MongoDB)...';
 
-    if (isFirebaseAvailable) {
-        try {
-            const storageRef = firebase.storage().ref();
-            const dbRef = firebase.firestore().collection('notes');
-            let completed = 0;
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('subject', subject);
+    formData.append('course', course);
+    formData.append('semester', semester);
+    formData.append('description', description);
 
-            for (const file of pendingFiles) {
-                const safeName = cleanFilename(file.name);
-                const fileRef = storageRef.child(`shared_notes/${Date.now()}_${safeName}`);
-                const uploadTask = fileRef.put(file);
+    pendingFiles.forEach(file => formData.append('files', file));
 
-                uploadTask.on('state_changed',
-                    (snapshot) => {
-                        const percent = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        progressBar.style.width = `${percent}%`;
-                    },
-                    (error) => {
-                        console.error('Firebase upload error:', error);
-                        showNotification('Upload failed: ' + error.message, true);
-                        progressContainer.style.display = 'none';
-                    },
-                    async () => {
-                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
-                        const noteRecord = {
-                            title: title,
-                            name: safeName,
-                            url: downloadURL,
-                            type: getFileTypeCategory(file.type, safeName),
-                            mimetype: file.type || 'application/octet-stream',
-                            size: file.size,
-                            subject: subject,
-                            course: course,
-                            semester: semester,
-                            description: description,
-                            uploader: currentUser ? currentUser.username : 'Student',
-                            uploaderId: currentUser ? currentUser.id : 'anonymous',
-                            downloadCount: 0,
-                            uploadDate: firebase.firestore.FieldValue.serverTimestamp()
-                        };
-
-                        await dbRef.add(noteRecord);
-                        completed++;
-                        if (completed === pendingFiles.length) {
-                            progressContainer.style.display = 'none';
-                            clearPendingSelection();
-                            resetUploadForm();
-                            showNotification('Notes uploaded to shared storage!');
-                            loadSharedNotesFeed();
-                        }
-                    }
-                );
+    try {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = percent + '%';
+                progressText.textContent = `Uploading notes... ${percent}%`;
             }
-        } catch (err) {
-            console.error('Cloud upload error:', err);
-            fallbackLocalUpload(title, subject, course, semester, description);
-        }
-    } else {
-        const formData = new FormData();
-        formData.append('title', title);
-        formData.append('subject', subject);
-        formData.append('course', course);
-        formData.append('semester', semester);
-        formData.append('description', description);
+        });
 
-        pendingFiles.forEach(file => formData.append('files', file));
-
-        try {
-            const xhr = new XMLHttpRequest();
-            xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percent + '%';
-                    progressText.textContent = `Uploading... ${percent}%`;
-                }
-            });
-
-            xhr.addEventListener('load', () => {
-                progressContainer.style.display = 'none';
-                if (xhr.status === 201 || xhr.status === 200) {
-                    clearPendingSelection();
-                    resetUploadForm();
-                    showNotification(`${pendingFiles.length} note file(s) uploaded successfully!`);
-                    loadSharedNotesFeed();
-                } else {
-                    showNotification('Upload failed on server', true);
-                }
-            });
-
-            xhr.addEventListener('error', () => {
-                progressContainer.style.display = 'none';
+        xhr.addEventListener('load', () => {
+            progressContainer.style.display = 'none';
+            if (xhr.status === 201 || xhr.status === 200) {
+                clearPendingSelection();
+                resetUploadForm();
+                showNotification(`✅ ${pendingFiles.length} note file(s) uploaded successfully!`);
+                loadSharedNotesFeed();
+            } else {
+                console.warn('Backend upload non-200 status:', xhr.status);
                 fallbackLocalUpload(title, subject, course, semester, description);
-            });
+            }
+        });
 
-            xhr.open('POST', `${API_BASE_URL}/files/upload`);
-            if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
-            xhr.send(formData);
-        } catch (err) {
+        xhr.addEventListener('error', (err) => {
+            console.error('XHR upload error:', err);
             progressContainer.style.display = 'none';
             fallbackLocalUpload(title, subject, course, semester, description);
-        }
+        });
+
+        xhr.open('POST', `${API_BASE_URL}/files/upload`);
+        if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+        xhr.send(formData);
+    } catch (err) {
+        console.error('Backend upload exception:', err);
+        progressContainer.style.display = 'none';
+        fallbackLocalUpload(title, subject, course, semester, description);
     }
 }
 
@@ -517,34 +469,9 @@ function resetUploadForm() {
 
 // Fetch Shared Notes Feed Across Platform
 async function loadSharedNotesFeed() {
-    updateConnectionStatus('connecting', 'Connecting to notes feed...');
+    updateConnectionStatus('connecting', 'Connecting to MyNotes Server...');
 
-    if (isFirebaseAvailable) {
-        try {
-            const snapshot = await firebase.firestore().collection('notes')
-                .orderBy('uploadDate', 'desc')
-                .get();
-
-            notesFeed = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    name: cleanFilename(data.name || data.title),
-                    title: cleanFilename(data.title || data.name),
-                    uploadDate: data.uploadDate ? (data.uploadDate.toDate ? data.uploadDate.toDate().toLocaleDateString() : 'Recent') : 'Recent',
-                    content: data.url
-                };
-            });
-            updateConnectionStatus('connected', 'Cloud Storage Connected');
-            renderNotesFeed();
-            return;
-        } catch (err) {
-            console.warn('Firebase feed fetch error:', err.message);
-        }
-    }
-
-    // Try Local REST API
+    // Primary: Express REST API with Cloudinary & MongoDB Atlas
     try {
         const response = await fetch(`${API_BASE_URL}/files`);
         if (response.ok) {
@@ -562,15 +489,43 @@ async function loadSharedNotesFeed() {
                 uploader: file.uploader || 'Student',
                 uploaderId: file.uploaderId || file.userId,
                 downloadCount: file.downloadCount || file.download_count || 0,
-                content: `${API_BASE_URL}/files/${file.id || file._id}/download`,
+                content: file.url || `${API_BASE_URL}/files/${file.id || file._id}/download`,
+                url: file.url || `${API_BASE_URL}/files/${file.id || file._id}/download`,
                 uploadDate: file.uploadDate ? new Date(file.uploadDate).toLocaleDateString() : 'Recent'
             }));
-            updateConnectionStatus('connected', 'Connected to Express Backend');
+            updateConnectionStatus('connected', 'Cloud Database Active (MongoDB Atlas & Cloudinary)');
             renderNotesFeed();
             return;
         }
     } catch (err) {
-        console.warn('Local API connect error:', err.message);
+        console.warn('Express API connect error:', err.message);
+    }
+
+    // Fallback: Firebase Firestore
+    if (isFirebaseAvailable) {
+        try {
+            const snapshot = await firebase.firestore().collection('notes')
+                .orderBy('uploadDate', 'desc')
+                .get();
+
+            notesFeed = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    name: cleanFilename(data.name || data.title),
+                    title: cleanFilename(data.title || data.name),
+                    uploadDate: data.uploadDate ? (data.uploadDate.toDate ? data.uploadDate.toDate().toLocaleDateString() : 'Recent') : 'Recent',
+                    content: data.url,
+                    url: data.url
+                };
+            });
+            updateConnectionStatus('connected', 'Cloud Storage Connected (Firebase)');
+            renderNotesFeed();
+            return;
+        } catch (err) {
+            console.warn('Firebase feed fetch error:', err.message);
+        }
     }
 
     updateConnectionStatus('connected', 'Local Notes Storage Ready');
@@ -686,48 +641,43 @@ function createNoteCardElement(note) {
     return card;
 }
 
-// File Previews with Missing Server Storage File Handler
+// File Previews
 async function openNotePreview(note) {
     activePreviewNote = note;
     previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
     previewBody.innerHTML = '';
 
-    const noteUrl = note.content || note.url;
+    const noteUrl = note.url || note.content || `${API_BASE_URL}/files/${note.id}/download`;
 
-    // Check if the file is available before attempting to render iframe/image
-    try {
-        const testRes = await fetch(noteUrl, { method: 'GET' });
-        const contentType = testRes.headers.get('content-type') || '';
-
-        // If server returns 404 or JSON error message (e.g. Note file not found on server storage)
-        if (!testRes.ok || contentType.includes('application/json')) {
-            renderMissingStoragePreviewCard(note);
-            previewModal.classList.add('active');
-            return;
-        }
-
-        if (note.type === 'img') {
-            const img = document.createElement('img');
-            img.src = noteUrl;
-            img.alt = note.title;
-            previewBody.appendChild(img);
-        } else if (note.type === 'pdf') {
-            const iframe = document.createElement('iframe');
-            iframe.src = noteUrl;
-            previewBody.appendChild(iframe);
-        } else if (note.type === 'txt') {
-            const text = await testRes.text();
-            const box = document.createElement('pre');
-            box.className = 'preview-text-box';
-            box.textContent = text;
-            previewBody.appendChild(box);
-        } else {
-            renderFallbackPreview(note);
-        }
-    } catch (err) {
-        renderMissingStoragePreviewCard(note);
+    if (note.type === 'img') {
+        const img = document.createElement('img');
+        img.src = noteUrl;
+        img.alt = note.title;
+        previewBody.appendChild(img);
+        previewModal.classList.add('active');
+        return;
+    } else if (note.type === 'pdf') {
+        const iframe = document.createElement('iframe');
+        iframe.src = noteUrl;
+        previewBody.appendChild(iframe);
+        previewModal.classList.add('active');
+        return;
+    } else if (note.type === 'txt') {
+        try {
+            const testRes = await fetch(noteUrl);
+            if (testRes.ok) {
+                const text = await testRes.text();
+                const box = document.createElement('pre');
+                box.className = 'preview-text-box';
+                box.textContent = text;
+                previewBody.appendChild(box);
+                previewModal.classList.add('active');
+                return;
+            }
+        } catch (e) {}
     }
 
+    renderFallbackPreview(note);
     previewModal.classList.add('active');
 }
 
@@ -737,7 +687,7 @@ function renderMissingStoragePreviewCard(note) {
             <i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i>
             <h4>Note File Unavailable on Server</h4>
             <p>
-                The file <strong>"${escapeHTML(note.name)}"</strong> is currently unavailable on server storage or was uploaded prior to local server restart.
+                The file <strong>"${escapeHTML(note.name)}"</strong> is currently unavailable on server storage.
             </p>
             <p>
                 Please upload a new copy of this document using the <strong>Upload Notes</strong> section above.
@@ -759,32 +709,46 @@ function renderFallbackPreview(note) {
     `;
 }
 
-// Download Handler (Increments Counter & Preserves Original Filename)
+// Download Handler
 async function downloadNoteFile(note) {
     note.downloadCount = (note.downloadCount || 0) + 1;
     renderNotesFeed();
 
-    const noteUrl = note.content || note.url;
+    const noteId = note.id;
     const downloadName = note.name || note.title || 'student_note';
 
     showNotification(`Downloading ${downloadName}...`);
 
+    const downloadUrl = `${API_BASE_URL}/files/${noteId}/download`;
+
     try {
-        const response = await fetch(noteUrl);
-        if (!response.ok) throw new Error('File not found');
+        const response = await fetch(downloadUrl);
+        if (response.ok) {
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
 
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = downloadName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+            return;
+        }
+    } catch (err) {
+        console.warn('Backend download error, trying direct URL:', err.message);
+    }
 
+    const directUrl = note.url || note.content;
+    if (directUrl) {
         const a = document.createElement('a');
-        a.href = blobUrl;
+        a.href = directUrl;
+        a.target = '_blank';
         a.download = downloadName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-    } catch (err) {
-        showNotification('File unavailable on server storage', true);
     }
 }
 
@@ -821,23 +785,14 @@ async function executeNoteDeletion() {
     if (!pendingDeleteId) return;
     deleteConfirmModal.classList.remove('active');
 
-    if (isFirebaseAvailable) {
-        try {
-            await firebase.firestore().collection('notes').doc(pendingDeleteId).delete();
-            showNotification('Note deleted successfully');
-        } catch (err) {
-            console.warn('Firebase delete note error:', err.message);
-        }
-    } else {
-        try {
-            await fetch(`${API_BASE_URL}/files/${pendingDeleteId}`, {
-                method: 'DELETE',
-                headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
-            });
-            showNotification('Note deleted successfully');
-        } catch (err) {
-            console.warn('Local delete note error:', err.message);
-        }
+    try {
+        await fetch(`${API_BASE_URL}/files/${pendingDeleteId}`, {
+            method: 'DELETE',
+            headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+        });
+        showNotification('Note deleted successfully');
+    } catch (err) {
+        console.warn('Delete note error:', err.message);
     }
 
     notesFeed = notesFeed.filter(n => n.id !== pendingDeleteId);
@@ -879,7 +834,6 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// Clean Mojibake and invalid special chars in filenames
 function cleanFilename(str) {
     if (!str) return '';
     return String(str)
