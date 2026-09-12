@@ -491,7 +491,12 @@ app.get('/api/files/:id/download', async (req, res) => {
         if (file.url) {
             const buffer = await fetchRemoteBuffer(file.url);
             if (buffer) {
-                res.setHeader('Content-Type', contentType);
+                // Detect actual content type from buffer magic bytes for PDFs
+                let dlContentType = contentType;
+                if (buffer.length > 4 && buffer.slice(0, 5).toString('ascii').startsWith('%PDF')) {
+                    dlContentType = 'application/pdf';
+                }
+                res.setHeader('Content-Type', dlContentType);
                 res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
                 res.setHeader('Content-Length', buffer.length);
                 return res.send(buffer);
@@ -517,7 +522,16 @@ app.get('/api/files/:id/view', async (req, res) => {
         }
 
         const originalName = file.name || file.title || 'note_document';
-        const contentType = file.mimetype || getMimeTypeFromExt(originalName);
+        let contentType = file.mimetype || getMimeTypeFromExt(originalName);
+
+        // Force correct MIME for known PDF files (by extension or type field)
+        if (originalName.toLowerCase().endsWith('.pdf') || file.type === 'pdf') {
+            contentType = 'application/pdf';
+        }
+
+        // CORS and cache headers for inline preview
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
 
         // 1. Check local server disk storage first (100% reliable direct binary stream)
         const filenameOnDisk = file.filename || (file.path ? path.basename(file.path) : '') || path.basename(file.url || '');
@@ -534,6 +548,13 @@ app.get('/api/files/:id/view', async (req, res) => {
         if (file.url) {
             const buffer = await fetchRemoteBuffer(file.url);
             if (buffer) {
+                // Detect actual content type from buffer magic bytes
+                if (buffer.length > 4) {
+                    const header = buffer.slice(0, 5).toString('ascii');
+                    if (header.startsWith('%PDF')) {
+                        contentType = 'application/pdf';
+                    }
+                }
                 res.setHeader('Content-Type', contentType);
                 res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
                 res.setHeader('Content-Length', buffer.length);

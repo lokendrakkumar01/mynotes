@@ -282,6 +282,20 @@ async function verifyUserSession() {
             currentUser = data.user;
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
             updateRoleUI();
+            // Re-render feed so edit/delete buttons reflect correct role from server
+            if (notesFeed.length > 0) {
+                renderNotesFeed();
+            }
+        } else if (response.status === 401 || response.status === 403) {
+            // Token expired or invalid — clear admin state, revert to guest
+            authToken = null;
+            localStorage.removeItem('authToken');
+            currentUser = { id: 'guest-' + Date.now(), username: 'Guest Student', email: 'student@mynotes.edu', isGuest: true, role: 'user' };
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            updateRoleUI();
+            if (notesFeed.length > 0) {
+                renderNotesFeed();
+            }
         }
     } catch (e) {
         console.warn('Verify session warning:', e.message);
@@ -1441,24 +1455,6 @@ async function openNotePreview(note) {
 
     // 2. PDF Document Preview
     if (note.type === 'pdf') {
-        let pdfTargetUrl = viewUrl;
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const res = await fetch(viewUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (res.ok) {
-                const blob = await res.blob();
-                if (blob.size > 0) {
-                    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-                    pdfTargetUrl = URL.createObjectURL(pdfBlob);
-                }
-            }
-        } catch (e) {
-            console.warn('PDF blob fetch warning:', e.message);
-        }
-
         previewContainer.innerHTML = '';
 
         const pdfCard = document.createElement('div');
@@ -1466,38 +1462,105 @@ async function openNotePreview(note) {
         pdfCard.style.flexDirection = 'column';
         pdfCard.style.gap = '10px';
 
-        const iframe = document.createElement('iframe');
-        iframe.src = pdfTargetUrl;
-        iframe.style.width = '100%';
-        iframe.style.height = '520px';
-        iframe.style.border = 'none';
-        iframe.style.borderRadius = '8px';
-        pdfCard.appendChild(iframe);
+        // Try to render via blob first (most reliable for correct Content-Type)
+        let blobSuccess = false;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(viewUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
 
-        const pdfFooter = document.createElement('div');
-        pdfFooter.className = 'glass-card';
-        pdfFooter.style.padding = '10px 16px';
-        pdfFooter.style.display = 'flex';
-        pdfFooter.style.justifyContent = 'space-between';
-        pdfFooter.style.alignItems = 'center';
-        pdfFooter.style.flexWrap = 'wrap';
-        pdfFooter.style.gap = '10px';
-        pdfFooter.innerHTML = `
-            <div style="font-size: 13px; color: var(--text-secondary);">
-                <i class="fas fa-file-pdf" style="color: var(--danger);"></i> <strong>${escapeHTML(note.title)}</strong> (.PDF Document)
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <a href="${viewUrl}" target="_blank" class="btn btn-outline btn-sm">
-                    <i class="fas fa-external-link-alt"></i> Open PDF in New Window
-                </a>
-                <button type="button" class="btn btn-primary btn-sm" id="modalFooterPdfDownloadBtn">
-                    <i class="fas fa-download"></i> Download PDF
-                </button>
-            </div>
-        `;
-        pdfFooter.querySelector('#modalFooterPdfDownloadBtn').addEventListener('click', () => downloadNoteFile(note));
-        pdfCard.appendChild(pdfFooter);
+            if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 500) { // Valid PDFs are at least a few hundred bytes
+                    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+                    const blobUrl = URL.createObjectURL(pdfBlob);
 
+                    const iframe = document.createElement('iframe');
+                    iframe.style.width = '100%';
+                    iframe.style.height = '520px';
+                    iframe.style.border = 'none';
+                    iframe.style.borderRadius = '8px';
+                    iframe.style.background = '#f5f5f5';
+                    iframe.src = blobUrl;
+
+                    // Detect if iframe fails to render PDF (shows error page)
+                    let iframeFailed = false;
+                    iframe.addEventListener('load', () => {
+                        try {
+                            // If we can access the iframe's content and it shows error text, swap to Google Docs viewer
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            const bodyText = iframeDoc.body ? iframeDoc.body.innerText : '';
+                            if (bodyText.includes('Failed to load PDF') || bodyText.includes('Error')) {
+                                iframeFailed = true;
+                                showGoogleDocsViewer();
+                            }
+                        } catch (e) {
+                            // Cross-origin — can't check, assume it's working
+                        }
+                    });
+
+                    pdfCard.appendChild(iframe);
+                    blobSuccess = true;
+                }
+            }
+        } catch (e) {
+            console.warn('PDF blob fetch warning:', e.message);
+        }
+
+        // Fallback: Google Docs Viewer (works for any publicly accessible URL)
+        function showGoogleDocsViewer() {
+            pdfCard.innerHTML = '';
+            const publicUrl = (directUrl.startsWith('http://') || directUrl.startsWith('https://'))
+                ? directUrl
+                : (window.location.origin + viewUrl);
+            const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(publicUrl)}&embedded=true`;
+
+            const gIframe = document.createElement('iframe');
+            gIframe.src = googleViewerUrl;
+            gIframe.style.width = '100%';
+            gIframe.style.height = '520px';
+            gIframe.style.border = 'none';
+            gIframe.style.borderRadius = '8px';
+            gIframe.style.background = '#f5f5f5';
+            pdfCard.appendChild(gIframe);
+
+            // Re-add footer after replacing card contents
+            pdfCard.appendChild(createPdfFooter());
+        }
+
+        if (!blobSuccess) {
+            showGoogleDocsViewer();
+        }
+
+        // PDF Footer Builder
+        function createPdfFooter() {
+            const pdfFooter = document.createElement('div');
+            pdfFooter.className = 'glass-card';
+            pdfFooter.style.padding = '10px 16px';
+            pdfFooter.style.display = 'flex';
+            pdfFooter.style.justifyContent = 'space-between';
+            pdfFooter.style.alignItems = 'center';
+            pdfFooter.style.flexWrap = 'wrap';
+            pdfFooter.style.gap = '10px';
+            pdfFooter.innerHTML = `
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    <i class="fas fa-file-pdf" style="color: var(--danger);"></i> <strong>${escapeHTML(note.title)}</strong> (.PDF Document)
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <a href="${viewUrl}" target="_blank" class="btn btn-outline btn-sm">
+                        <i class="fas fa-external-link-alt"></i> Open in New Tab
+                    </a>
+                    <button type="button" class="btn btn-primary btn-sm pdf-footer-dl-btn">
+                        <i class="fas fa-download"></i> Download PDF
+                    </button>
+                </div>
+            `;
+            pdfFooter.querySelector('.pdf-footer-dl-btn').addEventListener('click', () => downloadNoteFile(note));
+            return pdfFooter;
+        }
+
+        pdfCard.appendChild(createPdfFooter());
         previewContainer.appendChild(pdfCard);
         return;
     }
@@ -1726,22 +1789,38 @@ function copyToClipboard(text) {
 
 // Delete Note Modal Prompt
 function promptNoteDeletion(id) {
+    if (!currentUser || currentUser.role !== 'admin') {
+        showNotification('Only admin can delete notes', true);
+        return;
+    }
     pendingDeleteId = id;
     deleteConfirmModal.classList.add('active');
 }
 
 async function executeNoteDeletion() {
     if (!pendingDeleteId) return;
+    if (!currentUser || currentUser.role !== 'admin') {
+        showNotification('Only admin can delete notes', true);
+        deleteConfirmModal.classList.remove('active');
+        pendingDeleteId = null;
+        return;
+    }
     deleteConfirmModal.classList.remove('active');
 
     try {
-        await fetch(`${API_BASE_URL}/files/${pendingDeleteId}`, {
+        const res = await fetch(`${API_BASE_URL}/files/${pendingDeleteId}`, {
             method: 'DELETE',
             headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
         });
-        showNotification('Note deleted successfully');
+        if (res.ok) {
+            showNotification('Note deleted successfully');
+        } else {
+            const data = await res.json().catch(() => ({}));
+            showNotification(data.message || 'Failed to delete note', true);
+        }
     } catch (err) {
         console.warn('Delete note error:', err.message);
+        showNotification('Error deleting note', true);
     }
 
     notesFeed = notesFeed.filter(n => n.id !== pendingDeleteId);
@@ -2126,6 +2205,10 @@ async function loadAdminNotes() {
 }
 
 function openEditNoteModal(note) {
+    if (!currentUser || currentUser.role !== 'admin') {
+        showNotification('Only admin can edit notes', true);
+        return;
+    }
     const editModal = document.getElementById('editNoteModal');
     if (!editModal) return;
     
@@ -2154,6 +2237,11 @@ async function handleEditNoteSubmit(e) {
 
     if (!title || !subject) {
         showNotification('Title and Subject are required', true);
+        return;
+    }
+
+    if (!currentUser || currentUser.role !== 'admin') {
+        showNotification('Only admin can edit notes', true);
         return;
     }
 
