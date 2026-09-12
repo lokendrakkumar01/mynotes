@@ -668,6 +668,39 @@ app.delete('/api/files/:id', authenticateToken, requireAuth, async (req, res) =>
     }
 });
 
+// Edit Note Endpoint (For Uploader or Admin)
+app.patch('/api/files/:id', authenticateToken, requireAuth, async (req, res) => {
+    try {
+        const file = await db.getFileById(req.params.id);
+
+        if (!file) {
+            return res.status(404).json({ success: false, message: 'Note not found' });
+        }
+
+        const isOwner = (file.uploaderId === req.user.id || req.user.role === 'admin');
+        if (!isOwner) {
+            return res.status(403).json({ success: false, message: 'You are not authorized to edit this note' });
+        }
+
+        const { title, subject, educationLevel, classLevel, branch, semester, category, description, tags } = req.body;
+        const updateData = {};
+        if (title !== undefined) updateData.title = title;
+        if (subject !== undefined) updateData.subject = subject;
+        if (educationLevel !== undefined) updateData.educationLevel = educationLevel;
+        if (classLevel !== undefined) updateData.classLevel = classLevel;
+        if (branch !== undefined) updateData.branch = branch;
+        if (semester !== undefined) updateData.semester = semester;
+        if (category !== undefined) updateData.category = category;
+        if (description !== undefined) updateData.description = description;
+        if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : String(tags).split(',').map(t => t.trim());
+
+        const updatedFile = await db.updateFile(req.params.id, updateData, req.user.role === 'admin' ? 'admin' : req.user.id);
+        res.json({ success: true, message: 'Note updated successfully', file: updatedFile });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error updating note' });
+    }
+});
+
 // ==========================================
 // STRICT ADMIN PROTECTED APIS (/api/admin/*)
 // ==========================================
@@ -721,6 +754,27 @@ app.get('/api/admin/notes', authenticateToken, requireAdmin, async (req, res) =>
         res.json({ success: true, files });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching admin notes' });
+    }
+});
+
+app.patch('/api/admin/notes/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { title, subject, educationLevel, classLevel, branch, semester, category, description, tags } = req.body;
+        const updateData = {};
+        if (title !== undefined) updateData.title = title;
+        if (subject !== undefined) updateData.subject = subject;
+        if (educationLevel !== undefined) updateData.educationLevel = educationLevel;
+        if (classLevel !== undefined) updateData.classLevel = classLevel;
+        if (branch !== undefined) updateData.branch = branch;
+        if (semester !== undefined) updateData.semester = semester;
+        if (category !== undefined) updateData.category = category;
+        if (description !== undefined) updateData.description = description;
+        if (tags !== undefined) updateData.tags = Array.isArray(tags) ? tags : String(tags).split(',').map(t => t.trim());
+
+        const updatedFile = await db.updateFile(req.params.id, updateData, 'admin');
+        res.json({ success: true, message: 'Note updated by admin', file: updatedFile });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error updating note' });
     }
 });
 

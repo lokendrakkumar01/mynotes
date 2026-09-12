@@ -424,6 +424,16 @@ function setupEventListeners() {
     if (adminArticleForm) adminArticleForm.addEventListener('submit', handleCreateArticle);
     if (adminSyncNewsBtn) adminSyncNewsBtn.addEventListener('click', handleSyncNews);
 
+    // Edit Note Modal Listeners
+    const editNoteForm = document.getElementById('editNoteForm');
+    const closeEditNoteModal = document.getElementById('closeEditNoteModal');
+    const cancelEditNoteBtn = document.getElementById('cancelEditNoteBtn');
+    const editNoteModal = document.getElementById('editNoteModal');
+
+    if (editNoteForm) editNoteForm.addEventListener('submit', handleEditNoteSubmit);
+    if (closeEditNoteModal) closeEditNoteModal.addEventListener('click', () => editNoteModal.classList.remove('active'));
+    if (cancelEditNoteBtn) cancelEditNoteBtn.addEventListener('click', () => editNoteModal.classList.remove('active'));
+
     if (adminSubTabUsers) adminSubTabUsers.addEventListener('click', () => switchAdminPanel('users'));
     if (adminSubTabNotes) adminSubTabNotes.addEventListener('click', () => switchAdminPanel('notes'));
     if (adminSubTabReports) adminSubTabReports.addEventListener('click', () => switchAdminPanel('reports'));
@@ -1120,6 +1130,10 @@ function createNoteCardElement(note) {
             <button type="button" class="btn btn-primary download-btn">
                 <i class="fas fa-download"></i> Download
             </button>
+            ${(currentUser && (currentUser.role === 'admin' || currentUser.id === note.uploaderId)) ? `
+            <button type="button" class="btn btn-outline edit-note-btn" title="Edit Note Details">
+                <i class="fas fa-edit"></i>
+            </button>` : ''}
             <button type="button" class="btn btn-outline bookmark-btn ${isBookmarked ? 'active' : ''}" title="Save Note">
                 <i class="fas fa-bookmark"></i>
             </button>
@@ -1137,6 +1151,10 @@ function createNoteCardElement(note) {
 
     card.querySelector('.preview-btn').addEventListener('click', () => openNotePreview(note));
     card.querySelector('.download-btn').addEventListener('click', () => downloadNoteFile(note));
+    
+    const editBtn = card.querySelector('.edit-note-btn');
+    if (editBtn) editBtn.addEventListener('click', () => openEditNoteModal(note));
+
     card.querySelector('.bookmark-btn').addEventListener('click', () => toggleBookmarkNote(note));
     card.querySelector('.share-btn').addEventListener('click', () => shareNoteLink(note));
     card.querySelector('.report-btn').addEventListener('click', () => openReportModal(note));
@@ -2013,7 +2031,7 @@ async function loadAdminNotes() {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         const data = await res.json();
-        const notes = data.notes || [];
+        const notes = data.files || data.notes || [];
 
         adminNotesTableBody.innerHTML = '';
         notes.forEach(n => {
@@ -2022,12 +2040,14 @@ async function loadAdminNotes() {
             tr.innerHTML = `
                 <td style="padding: 10px; font-weight: 600;">${escapeHTML(n.title)}</td>
                 <td style="padding: 10px;">${escapeHTML(n.uploader || 'Student')}</td>
-                <td style="padding: 10px;">${escapeHTML(n.branch || n.category || 'General')}</td>
+                <td style="padding: 10px;">${escapeHTML(n.subject || n.branch || n.category || 'General')}</td>
                 <td style="padding: 10px;">${n.downloadCount || 0}</td>
-                <td style="padding: 10px;">
-                    <button class="btn btn-danger-outline btn-sm admin-delete-note-btn">Delete</button>
+                <td style="padding: 10px; display: flex; gap: 6px;">
+                    <button class="btn btn-outline btn-sm admin-edit-note-btn"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-danger-outline btn-sm admin-delete-note-btn"><i class="fas fa-trash"></i> Delete</button>
                 </td>
             `;
+            tr.querySelector('.admin-edit-note-btn').addEventListener('click', () => openEditNoteModal(n));
             tr.querySelector('.admin-delete-note-btn').addEventListener('click', async () => {
                 if (!confirm(`Delete note "${n.title}"?`)) return;
                 await fetch(`${API_BASE_URL}/admin/notes/${n.id}`, {
@@ -2036,11 +2056,67 @@ async function loadAdminNotes() {
                 });
                 showNotification('Note deleted by Admin');
                 loadAdminNotes();
+                loadSharedNotesFeed();
             });
             adminNotesTableBody.appendChild(tr);
         });
     } catch (e) {
         adminNotesTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px;">Failed to load notes.</td></tr>';
+    }
+}
+
+function openEditNoteModal(note) {
+    const editModal = document.getElementById('editNoteModal');
+    if (!editModal) return;
+    
+    document.getElementById('editNoteId').value = note.id;
+    document.getElementById('editNoteTitle').value = note.title || '';
+    document.getElementById('editNoteEducation').value = note.educationLevel || 'Engineering';
+    document.getElementById('editNoteBranch').value = note.branch || '';
+    document.getElementById('editNoteSubject').value = note.subject || '';
+    document.getElementById('editNoteSemester').value = note.semester || '';
+    document.getElementById('editNoteCategory').value = note.category || 'Class Notes';
+    document.getElementById('editNoteDescription').value = note.description || '';
+
+    editModal.classList.add('active');
+}
+
+async function handleEditNoteSubmit(e) {
+    e.preventDefault();
+    const noteId = document.getElementById('editNoteId').value;
+    const title = document.getElementById('editNoteTitle').value.trim();
+    const educationLevel = document.getElementById('editNoteEducation').value;
+    const branch = document.getElementById('editNoteBranch').value.trim();
+    const subject = document.getElementById('editNoteSubject').value.trim();
+    const semester = document.getElementById('editNoteSemester').value.trim();
+    const category = document.getElementById('editNoteCategory').value;
+    const description = document.getElementById('editNoteDescription').value.trim();
+
+    if (!title || !subject) {
+        showNotification('Title and Subject are required', true);
+        return;
+    }
+
+    try {
+        const url = (currentUser && currentUser.role === 'admin') ? `${API_BASE_URL}/admin/notes/${noteId}` : `${API_BASE_URL}/files/${noteId}`;
+        const res = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ title, educationLevel, branch, subject, semester, category, description })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showNotification('Note document updated successfully!');
+            document.getElementById('editNoteModal').classList.remove('active');
+            loadSharedNotesFeed();
+            if (currentUser && currentUser.role === 'admin') {
+                loadAdminNotes();
+            }
+        } else {
+            showNotification(data.message || 'Failed to update note', true);
+        }
+    } catch (err) {
+        showNotification('Error updating note details', true);
     }
 }
 

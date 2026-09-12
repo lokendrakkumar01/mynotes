@@ -557,6 +557,35 @@ const db = {
         return null;
     },
 
+    async updateFile(id, updateData, userId = null) {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                const file = await FileModel.findOne({ id });
+                if (file) {
+                    if (!userId || file.uploaderId === userId || userId === 'admin') {
+                        Object.assign(file, updateData);
+                        const saved = await file.save();
+                        return saved.toObject();
+                    }
+                }
+            } catch (err) {
+                console.error('MongoDB updateFile error:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        const file = (data.files || []).find(f => (f.id === id || f._id === id));
+        if (file) {
+            if (!userId || file.uploaderId === userId || file.userId === userId || userId === 'admin') {
+                Object.assign(file, updateData);
+                writeLocalData(data);
+                return file;
+            }
+        }
+        return null;
+    },
+
     // Article CRUD Operations
     async createArticle(articleData) {
         const id = articleData.id || ('art-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));

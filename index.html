@@ -514,6 +514,21 @@
 
             <!-- Feed View / Main Grid Container -->
             <section class="files-container" id="feedViewContainer">
+                <!-- Universal Knowledge Archive Banner (Inspired by Archive.org) -->
+                <div class="glass-card archive-banner" style="background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(6, 182, 212, 0.08) 100%); border-left: 5px solid var(--primary); padding: 18px 24px; margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                        <div style="font-size: 32px; color: var(--primary);"><i class="fas fa-university"></i></div>
+                        <div style="flex: 1;">
+                            <h3 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">
+                                Universal Academic Knowledge Library & Digital Archive
+                            </h3>
+                            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+                                Providing <strong>universal access to all academic knowledge</strong>, lecture notes, PYQs, and study guides for Class 1 to 12, Polytechnic, and 35+ Engineering Branches.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="section-header-flex">
                     <div class="section-title-flex">
                         <h2><i class="fas fa-folder-open"></i> Academic Notes Library</h2>
@@ -823,6 +838,72 @@
                 <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                     <button type="button" class="btn btn-secondary" id="cancelReportBtn">Cancel</button>
                     <button type="submit" class="btn btn-warning"><i class="fas fa-paper-plane"></i> Submit Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Note Document Modal (Admin & Uploader) -->
+    <div class="preview-modal" id="editNoteModal" role="dialog" aria-hidden="true">
+        <div class="preview-content" style="max-width: 600px;">
+            <div class="preview-header">
+                <h3><i class="fas fa-edit" style="color: var(--primary);"></i> Edit Document Details</h3>
+                <button class="close-preview" id="closeEditNoteModal" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="editNoteForm" style="margin-top: 15px; display: grid; gap: 14px;">
+                <input type="hidden" id="editNoteId">
+                <div class="form-group">
+                    <label for="editNoteTitle">Document Title *</label>
+                    <input type="text" id="editNoteTitle" class="form-control" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label for="editNoteEducation">Education Level</label>
+                        <select id="editNoteEducation" class="form-control">
+                            <option value="Engineering">Engineering</option>
+                            <option value="Diploma">Diploma / Polytechnic</option>
+                            <option value="School">School (Class 1-12)</option>
+                            <option value="Class 10">Class 10</option>
+                            <option value="Class 12">Class 12</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editNoteBranch">Branch / Class</label>
+                        <input type="text" id="editNoteBranch" class="form-control" placeholder="e.g. Computer Science Engineering">
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label for="editNoteSubject">Subject *</label>
+                        <input type="text" id="editNoteSubject" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editNoteSemester">Semester / Year</label>
+                        <input type="text" id="editNoteSemester" class="form-control" placeholder="e.g. Sem 1 / 2025-2026">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="editNoteCategory">Category</label>
+                    <select id="editNoteCategory" class="form-control">
+                        <option value="Class Notes">Class Notes</option>
+                        <option value="Handwritten Notes">Handwritten Notes</option>
+                        <option value="Question Papers">Question Papers (PYQs)</option>
+                        <option value="Solved Papers">Solved Papers</option>
+                        <option value="Assignments">Assignments / Homework</option>
+                        <option value="Lab Manuals">Lab Manuals & Practical Guide</option>
+                        <option value="Syllabus">Syllabus & Blueprint</option>
+                        <option value="Reference Books">Reference Books</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editNoteDescription">Description / Overview</label>
+                    <textarea id="editNoteDescription" class="form-control" rows="3" placeholder="Summary of study note contents..."></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;">
+                    <button type="button" class="btn btn-secondary" id="cancelEditNoteBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Note Changes</button>
                 </div>
             </form>
         </div>
