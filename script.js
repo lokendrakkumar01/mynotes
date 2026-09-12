@@ -1462,76 +1462,10 @@ async function openNotePreview(note) {
         pdfCard.style.flexDirection = 'column';
         pdfCard.style.gap = '10px';
 
-        // Try to render via blob first (most reliable for correct Content-Type)
-        let blobSuccess = false;
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-            const res = await fetch(viewUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (res.ok) {
-                const blob = await res.blob();
-                if (blob.size > 500) { // Valid PDFs are at least a few hundred bytes
-                    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-                    const blobUrl = URL.createObjectURL(pdfBlob);
-
-                    const iframe = document.createElement('iframe');
-                    iframe.style.width = '100%';
-                    iframe.style.height = '520px';
-                    iframe.style.border = 'none';
-                    iframe.style.borderRadius = '8px';
-                    iframe.style.background = '#f5f5f5';
-                    iframe.src = blobUrl;
-
-                    // Detect if iframe fails to render PDF (shows error page)
-                    let iframeFailed = false;
-                    iframe.addEventListener('load', () => {
-                        try {
-                            // If we can access the iframe's content and it shows error text, swap to Google Docs viewer
-                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            const bodyText = iframeDoc.body ? iframeDoc.body.innerText : '';
-                            if (bodyText.includes('Failed to load PDF') || bodyText.includes('Error')) {
-                                iframeFailed = true;
-                                showGoogleDocsViewer();
-                            }
-                        } catch (e) {
-                            // Cross-origin — can't check, assume it's working
-                        }
-                    });
-
-                    pdfCard.appendChild(iframe);
-                    blobSuccess = true;
-                }
-            }
-        } catch (e) {
-            console.warn('PDF blob fetch warning:', e.message);
-        }
-
-        // Fallback: Google Docs Viewer (works for any publicly accessible URL)
-        function showGoogleDocsViewer() {
-            pdfCard.innerHTML = '';
-            const publicUrl = (directUrl.startsWith('http://') || directUrl.startsWith('https://'))
-                ? directUrl
-                : (window.location.origin + viewUrl);
-            const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(publicUrl)}&embedded=true`;
-
-            const gIframe = document.createElement('iframe');
-            gIframe.src = googleViewerUrl;
-            gIframe.style.width = '100%';
-            gIframe.style.height = '520px';
-            gIframe.style.border = 'none';
-            gIframe.style.borderRadius = '8px';
-            gIframe.style.background = '#f5f5f5';
-            pdfCard.appendChild(gIframe);
-
-            // Re-add footer after replacing card contents
-            pdfCard.appendChild(createPdfFooter());
-        }
-
-        if (!blobSuccess) {
-            showGoogleDocsViewer();
-        }
+        // The public URL for Google Docs Viewer MUST be the backend proxy URL (publicly accessible)
+        // Never use Cloudinary direct URL as it may be dead/unreachable
+        const publicViewUrl = `${window.location.origin}${viewUrl.startsWith('/') ? '' : '/'}${viewUrl.replace(API_BASE_URL, '/api')}`;
+        const fullPublicViewUrl = viewUrl.startsWith('http') ? viewUrl : `${window.location.origin}/api/files/${note.id}/view`;
 
         // PDF Footer Builder
         function createPdfFooter() {
@@ -1558,6 +1492,93 @@ async function openNotePreview(note) {
             `;
             pdfFooter.querySelector('.pdf-footer-dl-btn').addEventListener('click', () => downloadNoteFile(note));
             return pdfFooter;
+        }
+
+        // Show error state when file is unavailable
+        function showFileUnavailable() {
+            pdfCard.innerHTML = '';
+            const errorBox = document.createElement('div');
+            errorBox.style.textAlign = 'center';
+            errorBox.style.padding = '60px 20px';
+            errorBox.style.background = 'rgba(0,0,0,0.03)';
+            errorBox.style.borderRadius = '8px';
+            errorBox.innerHTML = `
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: var(--warning); margin-bottom: 16px;"></i>
+                <h3 style="margin-bottom: 8px;">PDF File Unavailable</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">This document's cloud storage link is no longer accessible.<br>The file may need to be re-uploaded.</p>
+                <button type="button" class="btn btn-primary" id="tryDownloadAnywayBtn">
+                    <i class="fas fa-download"></i> Try Download Anyway
+                </button>
+            `;
+            errorBox.querySelector('#tryDownloadAnywayBtn').addEventListener('click', () => downloadNoteFile(note));
+            pdfCard.appendChild(errorBox);
+            pdfCard.appendChild(createPdfFooter());
+        }
+
+        // Try to render via blob first (most reliable for correct Content-Type)
+        let blobSuccess = false;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(viewUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 500) { // Valid PDFs are at least a few hundred bytes
+                    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+                    const blobUrl = URL.createObjectURL(pdfBlob);
+
+                    const iframe = document.createElement('iframe');
+                    iframe.style.width = '100%';
+                    iframe.style.height = '520px';
+                    iframe.style.border = 'none';
+                    iframe.style.borderRadius = '8px';
+                    iframe.style.background = '#f5f5f5';
+                    iframe.src = blobUrl;
+
+                    pdfCard.appendChild(iframe);
+                    blobSuccess = true;
+                } else {
+                    // Blob too small — file is likely unavailable/empty
+                    showFileUnavailable();
+                    previewContainer.appendChild(pdfCard);
+                    return;
+                }
+            } else {
+                // Server returned error (file not found on Cloudinary)
+                showFileUnavailable();
+                previewContainer.appendChild(pdfCard);
+                return;
+            }
+        } catch (e) {
+            console.warn('PDF blob fetch warning:', e.message);
+        }
+
+        // If blob fetch failed completely (network error/timeout), try Google Docs Viewer with backend URL
+        if (!blobSuccess) {
+            // Use the backend's own public URL (not Cloudinary's dead URL)
+            const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fullPublicViewUrl)}&embedded=true`;
+
+            const gIframe = document.createElement('iframe');
+            gIframe.src = googleViewerUrl;
+            gIframe.style.width = '100%';
+            gIframe.style.height = '520px';
+            gIframe.style.border = 'none';
+            gIframe.style.borderRadius = '8px';
+            gIframe.style.background = '#f5f5f5';
+            pdfCard.appendChild(gIframe);
+
+            // If Google Docs Viewer also fails after 8 seconds, show unavailable message
+            setTimeout(() => {
+                try {
+                    const gDoc = gIframe.contentDocument || gIframe.contentWindow?.document;
+                    const gText = gDoc?.body?.innerText || '';
+                    if (gText.includes('No preview') || gText.includes('Unable')) {
+                        showFileUnavailable();
+                    }
+                } catch (e) { /* cross-origin, can't check */ }
+            }, 8000);
         }
 
         pdfCard.appendChild(createPdfFooter());
@@ -1685,31 +1706,25 @@ async function downloadNoteFile(note) {
         const response = await fetch(downloadUrl);
         if (response.ok) {
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
+            if (blob.size > 100) {
+                const blobUrl = URL.createObjectURL(blob);
 
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = downloadName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-            showNotification(`✅ Downloaded ${downloadName}`);
-            return;
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = downloadName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+                showNotification(`✅ Downloaded ${downloadName}`);
+                return;
+            }
         }
+        // Server returned error or empty file
+        showNotification('⚠️ File unavailable — the cloud storage link may have expired. Please re-upload.', true);
     } catch (err) {
-        console.warn('Backend download error, falling back to direct link:', err.message);
-    }
-
-    const directUrl = note.url || note.content;
-    if (directUrl) {
-        const a = document.createElement('a');
-        a.href = directUrl;
-        a.target = '_blank';
-        a.download = downloadName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        console.warn('Backend download error:', err.message);
+        showNotification('⚠️ Download failed — file may need to be re-uploaded.', true);
     }
 }
 
