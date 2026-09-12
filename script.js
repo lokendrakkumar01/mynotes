@@ -115,9 +115,9 @@ function hideLoader() {
     setTimeout(() => {
         if (loader) {
             loader.style.opacity = '0';
-            setTimeout(() => loader.style.display = 'none', 300);
+            setTimeout(() => loader.style.display = 'none', 350);
         }
-    }, 400);
+    }, 450);
 }
 
 // Authentication Session Manager
@@ -249,7 +249,6 @@ async function handleLogin(e) {
             showNotification(data.message || 'Login failed', true);
         }
     } catch (err) {
-        // Fallback local login for offline/guest
         currentUser = { id: 'user-' + Date.now(), username, email: `${username}@mynotes.edu` };
         localStorage.setItem('currentUser', JSON.stringify(currentUser));
         showAppView();
@@ -355,7 +354,7 @@ function handleFilesSelected(fileList) {
     selectedFilesBar.style.display = 'flex';
 
     if (!noteTitle.value) {
-        noteTitle.value = pendingFiles[0].name.replace(/\.[^/.]+$/, "");
+        noteTitle.value = cleanFilename(pendingFiles[0].name.replace(/\.[^/.]+$/, ""));
     }
 }
 
@@ -368,7 +367,7 @@ function clearPendingSelection() {
 async function processFileUploads() {
     if (pendingFiles.length === 0) return;
 
-    const title = noteTitle.value.trim() || pendingFiles[0].name;
+    const title = cleanFilename(noteTitle.value.trim() || pendingFiles[0].name);
     const subject = noteSubject.value;
     const course = noteCourse.value;
     const semester = noteSemester.value;
@@ -379,14 +378,14 @@ async function processFileUploads() {
     progressText.textContent = 'Uploading notes to shared storage...';
 
     if (isFirebaseAvailable) {
-        // Firebase Cloud Storage & Firestore Integration for Live Shared Platform
         try {
             const storageRef = firebase.storage().ref();
             const dbRef = firebase.firestore().collection('notes');
             let completed = 0;
 
             for (const file of pendingFiles) {
-                const fileRef = storageRef.child(`shared_notes/${Date.now()}_${file.name}`);
+                const safeName = cleanFilename(file.name);
+                const fileRef = storageRef.child(`shared_notes/${Date.now()}_${safeName}`);
                 const uploadTask = fileRef.put(file);
 
                 uploadTask.on('state_changed',
@@ -403,9 +402,9 @@ async function processFileUploads() {
                         const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
                         const noteRecord = {
                             title: title,
-                            name: file.name,
+                            name: safeName,
                             url: downloadURL,
-                            type: getFileTypeCategory(file.type, file.name),
+                            type: getFileTypeCategory(file.type, safeName),
                             mimetype: file.type || 'application/octet-stream',
                             size: file.size,
                             subject: subject,
@@ -435,7 +434,6 @@ async function processFileUploads() {
             fallbackLocalUpload(title, subject, course, semester, description);
         }
     } else {
-        // Local Node Server Upload API
         const formData = new FormData();
         formData.append('title', title);
         formData.append('subject', subject);
@@ -483,16 +481,16 @@ async function processFileUploads() {
 }
 
 function fallbackLocalUpload(title, subject, course, semester, description) {
-    // In-memory fallback if server is offline
     pendingFiles.forEach(file => {
         const fileUrl = URL.createObjectURL(file);
+        const safeName = cleanFilename(file.name);
         const record = {
             id: 'note-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-            title: title || file.name,
-            name: file.name,
+            title: title || safeName,
+            name: safeName,
             url: fileUrl,
             content: fileUrl,
-            type: getFileTypeCategory(file.type, file.name),
+            type: getFileTypeCategory(file.type, safeName),
             size: file.size,
             subject: subject,
             course: course,
@@ -532,6 +530,8 @@ async function loadSharedNotesFeed() {
                 return {
                     id: doc.id,
                     ...data,
+                    name: cleanFilename(data.name || data.title),
+                    title: cleanFilename(data.title || data.name),
                     uploadDate: data.uploadDate ? (data.uploadDate.toDate ? data.uploadDate.toDate().toLocaleDateString() : 'Recent') : 'Recent',
                     content: data.url
                 };
@@ -551,8 +551,8 @@ async function loadSharedNotesFeed() {
             const data = await response.json();
             notesFeed = data.files.map(file => ({
                 id: file.id || file._id,
-                title: file.title || file.name,
-                name: file.name,
+                title: cleanFilename(file.title || file.name),
+                name: cleanFilename(file.name),
                 type: file.type || getFileTypeCategory(file.mimetype, file.name),
                 size: file.size,
                 subject: file.subject || 'General',
@@ -583,7 +583,6 @@ function renderNotesFeed() {
     filesGrid.innerHTML = '';
 
     const filtered = notesFeed.filter(note => {
-        // Multi-field search
         const q = activeSearchQuery;
         const matchesSearch = !q || (
             (note.title && note.title.toLowerCase().includes(q)) ||
@@ -594,22 +593,18 @@ function renderNotesFeed() {
             (note.description && note.description.toLowerCase().includes(q))
         );
 
-        // Type filter
         const matchesType = (activeTypeFilter === 'all') || (note.type === activeTypeFilter);
-        // Subject filter
         const matchesSubject = (activeSubjectFilter === 'all') || (note.subject === activeSubjectFilter);
-        // Semester filter
         const matchesSemester = (activeSemesterFilter === 'all') || (note.semester === activeSemesterFilter);
 
         return matchesSearch && matchesType && matchesSubject && matchesSemester;
     });
 
-    // Sort notes
     filtered.sort((a, b) => {
         if (activeSort === 'downloads') return (b.downloadCount || 0) - (a.downloadCount || 0);
         if (activeSort === 'title') return (a.title || a.name).localeCompare(b.title || b.name);
         if (activeSort === 'size') return (b.size || 0) - (a.size || 0);
-        return 0; // newest first by default
+        return 0;
     });
 
     if (notesCount) notesCount.textContent = filtered.length;
@@ -625,8 +620,9 @@ function renderNotesFeed() {
         return;
     }
 
-    filtered.forEach(note => {
+    filtered.forEach((note, idx) => {
         const card = createNoteCardElement(note);
+        card.style.animationDelay = `${Math.min(idx * 0.05, 0.4)}s`;
         filesGrid.appendChild(card);
     });
 }
@@ -690,42 +686,64 @@ function createNoteCardElement(note) {
     return card;
 }
 
-// File Previews
-function openNotePreview(note) {
+// File Previews with Missing Server Storage File Handler
+async function openNotePreview(note) {
     activePreviewNote = note;
     previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
     previewBody.innerHTML = '';
 
     const noteUrl = note.content || note.url;
 
-    if (note.type === 'img') {
-        const img = document.createElement('img');
-        img.src = noteUrl;
-        img.alt = note.title;
-        previewBody.appendChild(img);
-    } else if (note.type === 'pdf') {
-        const iframe = document.createElement('iframe');
-        iframe.src = noteUrl;
-        previewBody.appendChild(iframe);
-    } else if (note.type === 'txt') {
-        fetch(noteUrl)
-            .then(res => res.text())
-            .then(text => {
-                const box = document.createElement('pre');
-                box.className = 'preview-text-box';
-                box.textContent = text;
-                previewBody.appendChild(box);
-            })
-            .catch(() => {
-                renderFallbackPreview(note);
-            });
-        previewModal.classList.add('active');
-        return;
-    } else {
-        renderFallbackPreview(note);
+    // Check if the file is available before attempting to render iframe/image
+    try {
+        const testRes = await fetch(noteUrl, { method: 'GET' });
+        const contentType = testRes.headers.get('content-type') || '';
+
+        // If server returns 404 or JSON error message (e.g. Note file not found on server storage)
+        if (!testRes.ok || contentType.includes('application/json')) {
+            renderMissingStoragePreviewCard(note);
+            previewModal.classList.add('active');
+            return;
+        }
+
+        if (note.type === 'img') {
+            const img = document.createElement('img');
+            img.src = noteUrl;
+            img.alt = note.title;
+            previewBody.appendChild(img);
+        } else if (note.type === 'pdf') {
+            const iframe = document.createElement('iframe');
+            iframe.src = noteUrl;
+            previewBody.appendChild(iframe);
+        } else if (note.type === 'txt') {
+            const text = await testRes.text();
+            const box = document.createElement('pre');
+            box.className = 'preview-text-box';
+            box.textContent = text;
+            previewBody.appendChild(box);
+        } else {
+            renderFallbackPreview(note);
+        }
+    } catch (err) {
+        renderMissingStoragePreviewCard(note);
     }
 
     previewModal.classList.add('active');
+}
+
+function renderMissingStoragePreviewCard(note) {
+    previewBody.innerHTML = `
+        <div class="fallback-preview-card">
+            <i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i>
+            <h4>Note File Unavailable on Server</h4>
+            <p>
+                The file <strong>"${escapeHTML(note.name)}"</strong> is currently unavailable on server storage or was uploaded prior to local server restart.
+            </p>
+            <p>
+                Please upload a new copy of this document using the <strong>Upload Notes</strong> section above.
+            </p>
+        </div>
+    `;
 }
 
 function renderFallbackPreview(note) {
@@ -733,10 +751,10 @@ function renderFallbackPreview(note) {
         <div class="fallback-preview-card">
             <i class="${getFileIcon(note.type)}"></i>
             <h4>${escapeHTML(note.title)}</h4>
-            <p style="color: var(--text-light); margin: 10px 0;">
-                Direct preview is not available in browser for this document format (${escapeHTML(note.type.toUpperCase())}).
+            <p>
+                Direct browser preview is not available for document format <strong>${escapeHTML(note.type.toUpperCase())}</strong>.
             </p>
-            <p>Click <strong>Download</strong> below to open and view the full file on your device.</p>
+            <p>Click <strong>Download</strong> below to open and view the file on your device.</p>
         </div>
     `;
 }
@@ -752,8 +770,9 @@ async function downloadNoteFile(note) {
     showNotification(`Downloading ${downloadName}...`);
 
     try {
-        // Fetch as blob to force download with original filename
         const response = await fetch(noteUrl);
+        if (!response.ok) throw new Error('File not found');
+
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
 
@@ -765,14 +784,7 @@ async function downloadNoteFile(note) {
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
     } catch (err) {
-        // Direct link fallback
-        const a = document.createElement('a');
-        a.href = noteUrl;
-        a.download = downloadName;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        showNotification('File unavailable on server storage', true);
     }
 }
 
@@ -865,6 +877,16 @@ function formatBytes(bytes) {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Clean Mojibake and invalid special chars in filenames
+function cleanFilename(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/â€‹/g, '')
+        .replace(/â€™/g, "'")
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim();
 }
 
 function escapeHTML(str) {
