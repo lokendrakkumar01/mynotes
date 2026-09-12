@@ -401,7 +401,27 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
     }
 });
 
-// File Download Endpoint (Fixes PDF download corruptions by following HTTP redirects)
+function getMimeTypeFromExt(filename = '') {
+    const ext = path.extname(filename).toLowerCase();
+    switch (ext) {
+        case '.pdf': return 'application/pdf';
+        case '.jpg':
+        case '.jpeg': return 'image/jpeg';
+        case '.png': return 'image/png';
+        case '.webp': return 'image/webp';
+        case '.gif': return 'image/gif';
+        case '.txt': return 'text/plain; charset=utf-8';
+        case '.doc': return 'application/msword';
+        case '.docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case '.ppt': return 'application/vnd.ms-powerpoint';
+        case '.pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        case '.xls': return 'application/vnd.ms-excel';
+        case '.xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        default: return 'application/octet-stream';
+    }
+}
+
+// File Download Endpoint (Prioritizes local disk file and fixes Cloudinary redirects/raw URLs)
 app.get('/api/files/:id/download', async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
@@ -413,12 +433,27 @@ app.get('/api/files/:id/download', async (req, res) => {
         await db.incrementDownloadCount(req.params.id);
 
         const originalName = file.name || file.title || 'note_document';
-        const contentType = file.mimetype || 'application/octet-stream';
+        const contentType = file.mimetype || getMimeTypeFromExt(originalName);
 
-        if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
+        // 1. Check local server disk storage first (100% reliable direct binary stream)
+        const filenameOnDisk = file.filename || (file.path ? path.basename(file.path) : '') || path.basename(file.url || '');
+        if (filenameOnDisk) {
+            const filePath = path.join(uploadsDir, filenameOnDisk);
+            if (fs.existsSync(filePath)) {
+                return res.download(filePath, originalName);
+            }
+        }
+
+        // 2. Fallback to Cloudinary / Remote Storage with URL rewrite for non-image assets
+        let fileUrl = file.url || '';
+        const ext = path.extname(originalName).toLowerCase();
+        if (['.pdf', '.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
+            fileUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
+        }
+
+        if (fileUrl && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
             try {
-                // Native fetch automatically follows 301, 302, 307, 308 redirects from Cloudinary/CDN
-                const remoteRes = await fetch(file.url);
+                const remoteRes = await fetch(fileUrl);
                 if (remoteRes.ok) {
                     const arrayBuffer = await remoteRes.arrayBuffer();
                     const buffer = Buffer.from(arrayBuffer);
@@ -429,26 +464,19 @@ app.get('/api/files/:id/download', async (req, res) => {
                     return res.send(buffer);
                 }
             } catch (fetchErr) {
-                console.warn('Remote download fetch error, falling back to direct redirect:', fetchErr.message);
+                console.warn('Remote download fetch error, redirecting:', fetchErr.message);
             }
-            return res.redirect(file.url);
+            return res.redirect(fileUrl);
         }
 
-        const filenameOnDisk = file.filename || path.basename(file.path || '');
-        const filePath = path.join(uploadsDir, filenameOnDisk);
-
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ success: false, message: 'Note file not found on server storage' });
-        }
-
-        res.download(filePath, originalName);
+        return res.status(404).json({ success: false, message: 'Note file not found on server or cloud storage' });
     } catch (error) {
         console.error('Download error:', error);
         res.status(500).json({ success: false, message: 'Error initiating file download' });
     }
 });
 
-// File View / Inline Preview Endpoint
+// File View / Inline Preview Endpoint (Prioritizes local disk file and fixes PDF/Document rendering)
 app.get('/api/files/:id/view', async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
@@ -458,11 +486,29 @@ app.get('/api/files/:id/view', async (req, res) => {
         }
 
         const originalName = file.name || file.title || 'note_document';
-        const contentType = file.mimetype || 'application/octet-stream';
+        const contentType = file.mimetype || getMimeTypeFromExt(originalName);
 
-        if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
+        // 1. Check local server disk storage first (100% reliable direct binary stream)
+        const filenameOnDisk = file.filename || (file.path ? path.basename(file.path) : '') || path.basename(file.url || '');
+        if (filenameOnDisk) {
+            const filePath = path.join(uploadsDir, filenameOnDisk);
+            if (fs.existsSync(filePath)) {
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
+                return res.sendFile(filePath);
+            }
+        }
+
+        // 2. Fallback to Cloudinary / Remote Storage with URL rewrite for non-image assets
+        let fileUrl = file.url || '';
+        const ext = path.extname(originalName).toLowerCase();
+        if (['.pdf', '.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
+            fileUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
+        }
+
+        if (fileUrl && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
             try {
-                const remoteRes = await fetch(file.url);
+                const remoteRes = await fetch(fileUrl);
                 if (remoteRes.ok) {
                     const arrayBuffer = await remoteRes.arrayBuffer();
                     const buffer = Buffer.from(arrayBuffer);
@@ -473,19 +519,10 @@ app.get('/api/files/:id/view', async (req, res) => {
                     return res.send(buffer);
                 }
             } catch (err) {}
-            return res.redirect(file.url);
+            return res.redirect(fileUrl);
         }
 
-        const filenameOnDisk = file.filename || path.basename(file.path || '');
-        const filePath = path.join(uploadsDir, filenameOnDisk);
-
-        if (fs.existsSync(filePath)) {
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
-            return res.sendFile(filePath);
-        }
-
-        res.status(404).send('Note file missing on server storage');
+        return res.status(404).send('Note file missing on server storage');
     } catch (error) {
         console.error('View file error:', error);
         res.status(500).send('Error loading file preview');
