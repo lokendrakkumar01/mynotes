@@ -425,32 +425,41 @@ function getMimeTypeFromExt(filename = '') {
 async function fetchRemoteBuffer(url) {
     if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) return null;
 
-    // Attempt 1: Fetch original URL directly
-    try {
-        const res1 = await fetch(url);
-        if (res1.ok) {
-            const ab = await res1.arrayBuffer();
-            return Buffer.from(ab);
-        }
-    } catch (e) {}
+    const reqHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*'
+    };
 
-    // Attempt 2: Auto-swap Cloudinary resource type prefix (/image/upload/ <-> /raw/upload/)
-    try {
-        let altUrl = url;
-        if (url.includes('/image/upload/')) {
-            altUrl = url.replace('/image/upload/', '/raw/upload/');
-        } else if (url.includes('/raw/upload/')) {
-            altUrl = url.replace('/raw/upload/', '/image/upload/');
-        }
-
-        if (altUrl !== url) {
-            const res2 = await fetch(altUrl);
-            if (res2.ok) {
-                const ab = await res2.arrayBuffer();
-                return Buffer.from(ab);
+    const tryFetch = async (targetUrl) => {
+        try {
+            const res = await fetch(targetUrl, { headers: reqHeaders, redirect: 'follow' });
+            if (res.ok) {
+                const ab = await res.arrayBuffer();
+                const buf = Buffer.from(ab);
+                if (buf && buf.length > 0) return buf;
             }
+        } catch (e) {
+            console.warn('fetchRemoteBuffer warning for URL:', targetUrl, e.message);
         }
-    } catch (e) {}
+        return null;
+    };
+
+    // 1. Fetch exact original URL
+    let buffer = await tryFetch(url);
+    if (buffer) return buffer;
+
+    // 2. Cloudinary resource type prefix swap (/image/upload/ <-> /raw/upload/)
+    let altUrl = url;
+    if (url.includes('/image/upload/')) {
+        altUrl = url.replace('/image/upload/', '/raw/upload/');
+    } else if (url.includes('/raw/upload/')) {
+        altUrl = url.replace('/raw/upload/', '/image/upload/');
+    }
+
+    if (altUrl !== url) {
+        buffer = await tryFetch(altUrl);
+        if (buffer) return buffer;
+    }
 
     return null;
 }
