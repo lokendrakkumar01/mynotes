@@ -1,210 +1,297 @@
+const fs = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Create a connection pool to Neon Postgres
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    },
-    // Connection pool settings
-    max: 20, // Maximum number of clients in the pool
-    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-    connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection fails
-});
+const DATA_FILE = path.join(__dirname, 'data.json');
 
-// Test the database connection
-pool.on('connect', () => {
-    console.log('✅ Connected to Neon Postgres database');
-});
+// Check if PostgreSQL configuration is available
+const isPgConfigured = Boolean(process.env.DATABASE_URL);
+let pool = null;
+let pgConnected = false;
 
-pool.on('error', (err) => {
-    console.error('❌ Unexpected error on idle client', err);
-    process.exit(-1);
-});
-
-// Helper function to execute queries
-async function query(text, params) {
-    const start = Date.now();
+if (isPgConfigured) {
     try {
-        const res = await pool.query(text, params);
-        const duration = Date.now() - start;
-        console.log('📊 Query executed', { text: text.substring(0, 50), duration, rows: res.rowCount });
-        return res;
-    } catch (error) {
-        console.error('❌ Database query error:', error.message);
-        throw error;
+        pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false },
+            max: 20,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 5000,
+        });
+
+        pool.on('connect', () => {
+            console.log('✅ Connected to Postgres database');
+            pgConnected = true;
+        });
+
+        pool.on('error', (err) => {
+            console.error('❌ Postgres connection pool error:', err.message);
+            pgConnected = false;
+        });
+    } catch (err) {
+        console.warn('⚠️ Postgres initialization warning:', err.message);
     }
 }
 
-// Helper function to get a client from the pool (for transactions)
-async function getClient() {
-    const client = await pool.connect();
-    const originalQuery = client.query;
-    const originalRelease = client.release;
-
-    // Set a timeout of 5 seconds, after which we will log this client's last query
-    const timeout = setTimeout(() => {
-        console.error('⚠️  A client has been checked out for more than 5 seconds!');
-    }, 5000);
-
-    // Monkey patch the query method to keep track of the last query executed
-    client.query = (...args) => {
-        client.lastQuery = args;
-        return originalQuery.apply(client, args);
-    };
-
-    client.release = () => {
-        // Clear our timeout
-        clearTimeout(timeout);
-        // Set the methods back to their old un-monkey-patched version
-        client.query = originalQuery;
-        client.release = originalRelease;
-        return originalRelease.apply(client);
-    };
-
-    return client;
+// Local JSON Database Helper functions
+function readLocalData() {
+    try {
+        if (!fs.existsSync(DATA_FILE)) {
+            const initialData = { users: [], notes: [], files: [] };
+            fs.writeFileSync(DATA_FILE, JSON.stringify(initialData, null, 2));
+            return initialData;
+        }
+        const content = fs.readFileSync(DATA_FILE, 'utf8');
+        return JSON.parse(content);
+    } catch (error) {
+        console.error('Error reading data.json:', error.message);
+        return { users: [], notes: [], files: [] };
+    }
 }
 
-// Database helper functions
+function writeLocalData(data) {
+    try {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.error('Error writing to data.json:', error.message);
+    }
+}
 
-// Users
+// Unified Database API supporting Postgres + Local Data Fallback
 const db = {
-    // User operations
+    async testConnection() {
+        if (isPgConfigured && pool) {
+            try {
+                const res = await pool.query('SELECT NOW() as current_time');
+                pgConnected = true;
+                console.log('✅ Database (Postgres) connection verified:', res.rows[0].current_time);
+                return true;
+            } catch (err) {
+                console.warn('⚠️ Postgres connection failed, using local JSON storage:', err.message);
+                pgConnected = false;
+            }
+        }
+        console.log('ℹ️ Using local JSON database (data.json)');
+        return true;
+    },
+
+    // User Operations
     async createUser(id, username, email, hashedPassword, profileImage = null) {
-        const query_text = `
-      INSERT INTO users (id, username, email, password, profile_image)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, username, email, profile_image, created_at
-    `;
-        const result = await query(query_text, [id, username, email, hashedPassword, profileImage]);
-        return result.rows[0];
+        if (pgConnected && pool) {
+            try {
+                const text = `
+                    INSERT INTO users (id, username, email, password, profile_image)
+                    VALUES ($1, $2, $3, $4, $5)
+                    RETURNING id, username, email, profile_image, created_at
+                `;
+                const res = await pool.query(text, [id, username, email, hashedPassword, profileImage]);
+                return res.rows[0];
+            } catch (err) {
+                console.error('Postgres createUser failed, falling back to local:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        const newUser = {
+            id: id || Date.now().toString(),
+            username,
+            email,
+            password: hashedPassword,
+            profileImage: profileImage || null,
+            createdAt: new Date().toISOString()
+        };
+        data.users.push(newUser);
+        writeLocalData(data);
+        return newUser;
     },
 
     async getUserByUsername(username) {
-        const query_text = 'SELECT * FROM users WHERE username = $1';
-        const result = await query(query_text, [username]);
-        return result.rows[0];
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+                if (res.rows.length > 0) return res.rows[0];
+            } catch (err) {
+                console.error('Postgres getUserByUsername failed:', err.message);
+            }
+        }
+        const data = readLocalData();
+        return data.users.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
     },
 
     async getUserByEmail(email) {
-        const query_text = 'SELECT * FROM users WHERE email = $1';
-        const result = await query(query_text, [email]);
-        return result.rows[0];
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+                if (res.rows.length > 0) return res.rows[0];
+            } catch (err) {
+                console.error('Postgres getUserByEmail failed:', err.message);
+            }
+        }
+        const data = readLocalData();
+        return data.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
     },
 
     async getUserById(id) {
-        const query_text = 'SELECT id, username, email, profile_image, created_at FROM users WHERE id = $1';
-        const result = await query(query_text, [id]);
-        return result.rows[0];
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('SELECT id, username, email, profile_image, created_at FROM users WHERE id = $1', [id]);
+                if (res.rows.length > 0) return res.rows[0];
+            } catch (err) {
+                console.error('Postgres getUserById failed:', err.message);
+            }
+        }
+        const data = readLocalData();
+        return data.users.find(u => (u.id === id || u._id === id));
     },
 
-    // Note operations
-    async createNote(id, title, content, userId) {
-        const query_text = `
-      INSERT INTO notes (id, title, content, user_id)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-    `;
-        const result = await query(query_text, [id, title, content, userId]);
-        return result.rows[0];
-    },
-
-    async getNotesByUserId(userId) {
-        const query_text = 'SELECT * FROM notes WHERE user_id = $1 ORDER BY created_at DESC';
-        const result = await query(query_text, [userId]);
-        return result.rows;
-    },
-
-    async getNoteById(id, userId) {
-        const query_text = 'SELECT * FROM notes WHERE id = $1 AND user_id = $2';
-        const result = await query(query_text, [id, userId]);
-        return result.rows[0];
-    },
-
-    async updateNote(id, title, content, userId) {
-        const query_text = `
-      UPDATE notes 
-      SET title = $1, content = $2
-      WHERE id = $3 AND user_id = $4
-      RETURNING *
-    `;
-        const result = await query(query_text, [title, content, id, userId]);
-        return result.rows[0];
-    },
-
-    async deleteNote(id, userId) {
-        const query_text = 'DELETE FROM notes WHERE id = $1 AND user_id = $2 RETURNING *';
-        const result = await query(query_text, [id, userId]);
-        return result.rows[0];
-    },
-
-    // File operations
+    // File / Notes Upload Operations
     async createFile(fileData) {
-        const query_text = `
-      INSERT INTO files (id, name, filename, type, size, mimetype, uploader_id, uploader, uploader_email)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *
-    `;
-        const result = await query(query_text, [
-            fileData.id,
-            fileData.name,
-            fileData.filename,
-            fileData.type,
-            fileData.size,
-            fileData.mimetype,
-            fileData.uploaderId,
-            fileData.uploader,
-            fileData.uploaderEmail
-        ]);
-        return result.rows[0];
+        const id = fileData.id || (Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9));
+        const createdAt = new Date().toISOString();
+
+        const record = {
+            id: id,
+            _id: id,
+            title: fileData.title || fileData.name || 'Untitled Note',
+            name: fileData.name || 'document',
+            filename: fileData.filename,
+            type: fileData.type || 'other',
+            size: fileData.size || 0,
+            mimetype: fileData.mimetype || 'application/octet-stream',
+            subject: fileData.subject || 'General',
+            semester: fileData.semester || 'All Semesters',
+            course: fileData.course || 'General',
+            description: fileData.description || '',
+            uploaderId: fileData.uploaderId || fileData.userId || 'anonymous',
+            uploader: fileData.uploader || 'Student',
+            uploaderEmail: fileData.uploaderEmail || '',
+            downloadCount: fileData.downloadCount || 0,
+            uploadDate: fileData.uploadDate || createdAt,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        };
+
+        if (pgConnected && pool) {
+            try {
+                const text = `
+                    INSERT INTO files (id, name, filename, type, size, mimetype, uploader_id, uploader, uploader_email, subject, semester, course, description, download_count)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                    RETURNING *
+                `;
+                const res = await pool.query(text, [
+                    record.id, record.name, record.filename, record.type, record.size, record.mimetype,
+                    record.uploaderId, record.uploader, record.uploaderEmail,
+                    record.subject, record.semester, record.course, record.description, record.downloadCount
+                ]);
+                return res.rows[0];
+            } catch (err) {
+                console.error('Postgres createFile failed, falling back to local JSON:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        data.files = data.files || [];
+        data.files.unshift(record);
+        writeLocalData(data);
+        return record;
+    },
+
+    // Get ALL Shared Public Notes for All Students
+    async getPublicFiles() {
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('SELECT * FROM files ORDER BY upload_date DESC');
+                return res.rows;
+            } catch (err) {
+                console.error('Postgres getPublicFiles failed:', err.message);
+            }
+        }
+        const data = readLocalData();
+        const filesList = data.files || [];
+        return filesList.sort((a, b) => new Date(b.uploadDate || b.createdAt || 0) - new Date(a.uploadDate || a.createdAt || 0));
     },
 
     async getFilesByUserId(userId) {
-        const query_text = 'SELECT * FROM files WHERE uploader_id = $1 ORDER BY upload_date DESC';
-        const result = await query(query_text, [userId]);
-        return result.rows;
+        // Return all files so students can access all shared notes, while identifying user ownership
+        return this.getPublicFiles();
     },
 
     async getFileById(id) {
-        const query_text = 'SELECT * FROM files WHERE id = $1';
-        const result = await query(query_text, [id]);
-        return result.rows[0];
-    },
-
-    async deleteFile(id, uploaderId) {
-        const query_text = 'DELETE FROM files WHERE id = $1 AND uploader_id = $2 RETURNING *';
-        const result = await query(query_text, [id, uploaderId]);
-        return result.rows[0];
-    },
-
-    async renameFile(id, newName, uploaderId) {
-        const query_text = `
-      UPDATE files 
-      SET name = $1
-      WHERE id = $2 AND uploader_id = $3
-      RETURNING *
-    `;
-        const result = await query(query_text, [newName, id, uploaderId]);
-        return result.rows[0];
-    },
-
-    // Utility functions
-    async testConnection() {
-        try {
-            const result = await query('SELECT NOW() as current_time');
-            console.log('✅ Database connection test successful:', result.rows[0].current_time);
-            return true;
-        } catch (error) {
-            console.error('❌ Database connection test failed:', error.message);
-            return false;
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('SELECT * FROM files WHERE id = $1', [id]);
+                if (res.rows.length > 0) return res.rows[0];
+            } catch (err) {
+                console.error('Postgres getFileById failed:', err.message);
+            }
         }
+        const data = readLocalData();
+        return (data.files || []).find(f => (f.id === id || f._id === id));
+    },
+
+    async incrementDownloadCount(id) {
+        if (pgConnected && pool) {
+            try {
+                await pool.query('UPDATE files SET download_count = COALESCE(download_count, 0) + 1 WHERE id = $1', [id]);
+            } catch (err) {
+                console.error('Postgres incrementDownloadCount error:', err.message);
+            }
+        }
+        const data = readLocalData();
+        const file = (data.files || []).find(f => f.id === id || f._id === id);
+        if (file) {
+            file.downloadCount = (file.downloadCount || 0) + 1;
+            writeLocalData(data);
+        }
+    },
+
+    async deleteFile(id, userId) {
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('DELETE FROM files WHERE id = $1 AND (uploader_id = $2 OR uploader_id = \'admin\') RETURNING *', [id, userId]);
+                if (res.rows.length > 0) return res.rows[0];
+            } catch (err) {
+                console.error('Postgres deleteFile error:', err.message);
+            }
+        }
+        const data = readLocalData();
+        const fileIndex = (data.files || []).findIndex(f => (f.id === id || f._id === id));
+        if (fileIndex !== -1) {
+            const file = data.files[fileIndex];
+            // Authorize if uploader or admin
+            if (!userId || file.uploaderId === userId || file.userId === userId || userId === 'admin') {
+                const [deleted] = data.files.splice(fileIndex, 1);
+                writeLocalData(data);
+                return deleted;
+            }
+        }
+        return null;
+    },
+
+    async renameFile(id, newName, userId) {
+        if (pgConnected && pool) {
+            try {
+                const res = await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND uploader_id = $3 RETURNING *', [newName, id, userId]);
+                if (res.rows.length > 0) return res.rows[0];
+            } catch (err) {
+                console.error('Postgres renameFile error:', err.message);
+            }
+        }
+        const data = readLocalData();
+        const file = (data.files || []).find(f => (f.id === id || f._id === id));
+        if (file && (!userId || file.uploaderId === userId || file.userId === userId)) {
+            file.name = newName;
+            file.title = newName;
+            file.updatedAt = new Date().toISOString();
+            writeLocalData(data);
+            return file;
+        }
+        return null;
     }
 };
 
 module.exports = {
     pool,
-    query,
-    getClient,
     db
 };

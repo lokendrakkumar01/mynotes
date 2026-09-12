@@ -4,58 +4,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notes Manager - Advanced</title>
+    <title>MyNotes — Student Notes Upload & Download Platform</title>
+    
+    <!-- SEO & Social Meta Tags -->
+    <meta name="description" content="MyNotes is a student-friendly platform for uploading, sharing, previewing and downloading academic notes and study materials.">
+    <meta name="keywords" content="notes, student notes, study material, university notes, exam preparation, download notes, share notes">
+    <meta property="og:title" content="MyNotes — Student Notes Sharing Platform">
+    <meta property="og:description" content="Upload, preview, share and download academic notes and study materials with classmates easily.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://lokendrakkumar01.github.io/mynotes/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="MyNotes — Student Notes Sharing Platform">
+    <meta name="twitter:description" content="Upload, preview, share and download academic notes and study materials with classmates easily.">
+    
+    <!-- FontAwesome Icons & Google Fonts -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Firebase Compat SDKs for Cloud Shared Storage (GitHub Pages & Live Web Support) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 </head>
 
 <body>
-    <!-- Loading Screen -->
-    <div class="loader" id="loader">
+    <!-- App Loader Screen -->
+    <div class="loader" id="loader" aria-live="polite">
         <div class="loader-spinner"></div>
-        <p>Loading Notes Manager...</p>
+        <p>Loading MyNotes Platform...</p>
     </div>
 
-    <!-- Connection Status -->
+    <!-- Live Connection / Network Indicator -->
     <div class="connection-status" id="connectionStatus">
         <i class="fas fa-wifi"></i>
         <span id="connectionText">Checking connection...</span>
     </div>
 
-    <!-- Login Form -->
+    <!-- Login / Authentication Container -->
     <div class="login-container" id="loginContainer">
         <div class="login-form" id="loginFormContainer">
-            <h2><i class="fas fa-file-alt"></i> Notes Manager - UA ACADEMY</h2>
+            <div class="brand-header">
+                <i class="fas fa-graduation-cap brand-logo-icon"></i>
+                <h2>MyNotes Platform</h2>
+                <p class="brand-subtitle">Student Notes Upload & Sharing Portal</p>
+            </div>
+
+            <!-- Optional Google Login -->
+            <button id="googleLoginBtn" class="btn btn-google" style="display: none;">
+                <i class="fab fa-google"></i> Continue with Google
+            </button>
+
             <form id="loginForm">
                 <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" class="form-control" placeholder="Enter your username" required
-                        autocomplete="username">
+                    <label for="username"><i class="fas fa-user"></i> Username or Email</label>
+                    <input type="text" id="username" class="form-control" placeholder="Enter username or email" required autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required
-                        autocomplete="current-password">
+                    <label for="password"><i class="fas fa-lock"></i> Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter password" required autocomplete="current-password">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                    <i class="fas fa-sign-in-alt"></i> Login
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i> Login to MyNotes
                 </button>
             </form>
+
+            <div class="guest-access-bar" style="margin-top: 15px; text-align: center;">
+                <button type="button" id="guestBtn" class="btn btn-secondary btn-sm" style="width: 100%;">
+                    <i class="fas fa-globe"></i> Browse Notes as Guest Student
+                </button>
+            </div>
+
             <div class="register-link">
-                Don't have an account? <a href="#" id="registerLink">Register here</a>
+                Don't have an account? <a href="#" id="registerLink">Create Account</a>
             </div>
         </div>
 
         <!-- Registration Form -->
         <div class="register-form" id="registerFormContainer" style="display: none;">
-            <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+            <div class="brand-header">
+                <i class="fas fa-user-plus brand-logo-icon"></i>
+                <h2>Join MyNotes</h2>
+                <p class="brand-subtitle">Share study materials with your college friends</p>
+            </div>
 
             <div class="profile-upload">
                 <div class="profile-image-container">
                     <div class="profile-placeholder" id="profilePlaceholder">
                         <i class="fas fa-user"></i>
                     </div>
-                    <img id="profileImage" style="display: none;" alt="Profile image" title="Profile image">
+                    <img id="profileImage" style="display: none;" alt="Profile preview">
                 </div>
                 <input type="file" id="profileImageInput" accept="image/*" style="display: none;">
                 <button type="button" class="profile-upload-btn" id="profileUploadBtn">
@@ -66,173 +104,306 @@
             <form id="registerForm">
                 <div class="form-group">
                     <label for="regUsername">Username</label>
-                    <input type="text" id="regUsername" class="form-control" placeholder="Choose a username" required
-                        autocomplete="username">
+                    <input type="text" id="regUsername" class="form-control" placeholder="Choose a username" required autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="regEmail">Email Address</label>
-                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required
-                        autocomplete="email">
+                    <input type="email" id="regEmail" class="form-control" placeholder="Enter your email" required autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="regPassword">Password</label>
-                    <input type="password" id="regPassword" class="form-control" placeholder="Create a password"
-                        required autocomplete="new-password">
+                    <input type="password" id="regPassword" class="form-control" placeholder="Create a password" required minlength="6" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="regConfirmPassword">Confirm Password</label>
-                    <input type="password" id="regConfirmPassword" class="form-control"
-                        placeholder="Confirm your password" required autocomplete="new-password">
+                    <input type="password" id="regConfirmPassword" class="form-control" placeholder="Confirm password" required autocomplete="new-password">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                    <i class="fas fa-user-plus"></i> Create Account
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-user-check"></i> Register Account
                 </button>
             </form>
+
             <div class="login-link">
-                Already have an account? <a href="#" id="loginLink">Login here</a>
+                Already registered? <a href="#" id="loginLink">Login here</a>
             </div>
         </div>
     </div>
 
-    <!-- Main App -->
+    <!-- Main Student Notes Application Container -->
     <div class="app-container" id="appContainer">
         <div class="container">
-            <header>
+            <header class="app-header">
                 <div class="logo">
-                    <i class="fas fa-file-alt"></i>
-                    <span>NOTES MANAGER - UA ACADEMY</span>
+                    <i class="fas fa-book-open"></i>
+                    <div class="logo-text">
+                        <span class="logo-title">MyNotes</span>
+                        <span class="logo-subtitle">Student Sharing Portal</span>
+                    </div>
                 </div>
+                
                 <div class="user-info">
-                    <div class="user-avatar">
+                    <div class="user-avatar" id="userAvatarContainer">
                         <div class="profile-placeholder" id="headerProfilePlaceholder">
                             <i class="fas fa-user"></i>
                         </div>
-                        <img id="headerProfileImage" alt="User profile image" title="User profile image">
+                        <img id="headerProfileImage" alt="User Avatar" style="display: none;">
                     </div>
                     <div class="user-details">
-                        <div class="user-name" id="userName">User</div>
-                        <div class="user-email" id="userEmail">user@example.com</div>
+                        <div class="user-name" id="userName">Student</div>
+                        <div class="user-email" id="userEmail">guest@mynotes.edu</div>
                     </div>
-                    <button class="contact-btn" id="contactBtn">
-                        <i class="fas fa-envelope"></i> Contact
-                    </button>
-                    <button class="logout-btn" id="logoutBtn">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-                        <div class="toggle-circle"></div>
-                    </button>
+
+                    <div class="header-actions">
+                        <button class="btn btn-outline" id="contactBtn" title="Support & Feedback">
+                            <i class="fas fa-envelope"></i> <span class="hide-mobile">Contact</span>
+                        </button>
+                        <button class="btn btn-theme" id="themeToggle" title="Toggle Light/Dark Theme">
+                            <i class="fas fa-moon" id="themeIcon"></i>
+                        </button>
+                        <button class="btn btn-danger-outline" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i> <span class="hide-mobile">Logout</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            <section class="upload-section">
-                <div class="upload-area" id="uploadArea">
+            <!-- Upload Section with Full Academic Notes Metadata -->
+            <section class="upload-section card">
+                <div class="section-title">
                     <i class="fas fa-cloud-upload-alt"></i>
-                    <h3>Upload Your Notes</h3>
-                    <p>Drag & drop files here or click to browse</p>
-                    <button class="upload-btn">
-                        <i class="fas fa-plus"></i>
-                        Select Files
-                    </button>
-                    <input type="file" id="fileInput" multiple
-                        accept="image/*,video/*,application/pdf,text/plain,.doc,.docx" style="display: none;">
+                    <h3>Upload Notes & Study Material</h3>
                 </div>
-                <div class="progress-container" id="progressContainer">
+
+                <div class="upload-form-grid">
+                    <div class="form-group">
+                        <label for="noteTitle"><i class="fas fa-heading"></i> Note Title *</label>
+                        <input type="text" id="noteTitle" class="form-control" placeholder="e.g., Data Structures Unit 3 Handwritten Notes" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="noteSubject"><i class="fas fa-book"></i> Subject / Course *</label>
+                        <select id="noteSubject" class="form-control">
+                            <option value="Computer Science">Computer Science</option>
+                            <option value="Mathematics">Mathematics</option>
+                            <option value="Data Structures & Algorithms">Data Structures & Algorithms</option>
+                            <option value="Physics">Physics</option>
+                            <option value="Electronics & Communication">Electronics & Communication</option>
+                            <option value="Mechanical Engineering">Mechanical Engineering</option>
+                            <option value="Civil Engineering">Civil Engineering</option>
+                            <option value="Chemistry">Chemistry</option>
+                            <option value="Business Administration">Business Administration</option>
+                            <option value="General">General / Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="noteCourse"><i class="fas fa-graduation-cap"></i> Branch / Degree</label>
+                        <select id="noteCourse" class="form-control">
+                            <option value="B.Tech / B.E.">B.Tech / B.E.</option>
+                            <option value="BCA">BCA</option>
+                            <option value="MCA">MCA</option>
+                            <option value="B.Sc">B.Sc</option>
+                            <option value="M.Sc">M.Sc</option>
+                            <option value="Diploma">Diploma</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="noteSemester"><i class="fas fa-layer-group"></i> Semester</label>
+                        <select id="noteSemester" class="form-control">
+                            <option value="Sem 1">Semester 1</option>
+                            <option value="Sem 2">Semester 2</option>
+                            <option value="Sem 3">Semester 3</option>
+                            <option value="Sem 4">Semester 4</option>
+                            <option value="Sem 5">Semester 5</option>
+                            <option value="Sem 6">Semester 6</option>
+                            <option value="Sem 7">Semester 7</option>
+                            <option value="Sem 8">Semester 8</option>
+                            <option value="All Semesters">All Semesters</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="noteDescription"><i class="fas fa-align-left"></i> Description / Topic Summary</label>
+                    <textarea id="noteDescription" class="form-control" rows="2" placeholder="Briefly describe what topics are covered in this document..."></textarea>
+                </div>
+
+                <!-- Drag and Drop Dropzone -->
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-file-upload upload-icon"></i>
+                    <h4>Drag & Drop Notes Files Here</h4>
+                    <p>Supported: <strong>PDF, DOC, DOCX, TXT, PPT, PPTX, XLS, XLSX, JPG, PNG, WEBP</strong> (Max 50MB)</p>
+                    <button type="button" class="btn btn-primary upload-trigger-btn">
+                        <i class="fas fa-plus"></i> Select Files
+                    </button>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,image/*,application/pdf,text/plain" style="display: none;">
+                </div>
+
+                <!-- Selected Files Pending Upload Badge Bar -->
+                <div id="selectedFilesBar" class="selected-files-bar" style="display: none;">
+                    <div class="selected-files-count" id="selectedFilesCount">0 files selected</div>
+                    <button type="button" class="btn btn-success" id="startUploadBtn">
+                        <i class="fas fa-cloud-upload-alt"></i> Upload Notes Now
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="cancelSelectionBtn">
+                        Cancel
+                    </button>
+                </div>
+
+                <!-- Upload Progress -->
+                <div class="progress-container" id="progressContainer" style="display: none;">
                     <div class="progress-bar">
                         <div class="progress" id="progressBar"></div>
                     </div>
-                    <p id="progressText">Uploading...</p>
+                    <p id="progressText">Uploading files to shared storage...</p>
                 </div>
             </section>
 
-            <section class="search-filter-section">
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Search notes...">
-                </div>
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all">All</button>
-                    <button class="filter-btn" data-filter="pdf">PDF</button>
-                    <button class="filter-btn" data-filter="doc">DOC/DOCX</button>
-                    <button class="filter-btn" data-filter="txt">TXT</button>
-                    <button class="filter-btn" data-filter="img">Images</button>
-                    <button class="filter-btn" data-filter="video">Videos</button>
-                </div>
-            </section>
-
-            <section class="files-container">
-                <div class="files-grid" id="filesGrid">
-                    <!-- Files will be dynamically added here -->
-                </div>
-            </section>
-
-            <div class="preview-modal" id="previewModal">
-                <div class="preview-content">
-                    <button class="close-preview" id="closePreview" aria-label="Close preview" title="Close preview">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <h3 id="previewTitle">File Preview</h3>
-                    <div class="preview-body" id="previewBody">
-                        <!-- Preview content will be added here -->
+            <!-- Search, Filter & Discovery Bar -->
+            <section class="search-filter-section card">
+                <div class="search-bar-row">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" placeholder="Search notes by title, subject, filename, semester...">
                     </div>
                 </div>
-            </div>
 
+                <div class="filter-controls-row">
+                    <div class="filter-buttons" id="typeFilterButtons">
+                        <button class="filter-btn active" data-filter="all"><i class="fas fa-th-large"></i> All Notes</button>
+                        <button class="filter-btn" data-filter="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                        <button class="filter-btn" data-filter="doc"><i class="fas fa-file-word"></i> Documents</button>
+                        <button class="filter-btn" data-filter="img"><i class="fas fa-file-image"></i> Images</button>
+                        <button class="filter-btn" data-filter="ppt"><i class="fas fa-file-powerpoint"></i> Presentations</button>
+                        <button class="filter-btn" data-filter="xls"><i class="fas fa-file-excel"></i> Spreadsheets</button>
+                    </div>
 
+                    <div class="dropdown-filters">
+                        <select id="subjectFilter" class="filter-dropdown">
+                            <option value="all">All Subjects</option>
+                            <option value="Computer Science">Computer Science</option>
+                            <option value="Mathematics">Mathematics</option>
+                            <option value="Data Structures & Algorithms">Data Structures</option>
+                            <option value="Physics">Physics</option>
+                            <option value="Electronics & Communication">Electronics</option>
+                            <option value="Mechanical Engineering">Mechanical</option>
+                            <option value="Civil Engineering">Civil</option>
+                            <option value="Chemistry">Chemistry</option>
+                            <option value="Business Administration">Business</option>
+                            <option value="General">General</option>
+                        </select>
 
-            <!-- Contact Modal -->
-            <div class="contact-modal" id="contactModal">
-                <div class="contact-content">
-                    <button class="close-contact" id="closeContact" title="Close contact form">
+                        <select id="semesterFilter" class="filter-dropdown">
+                            <option value="all">All Semesters</option>
+                            <option value="Sem 1">Semester 1</option>
+                            <option value="Sem 2">Semester 2</option>
+                            <option value="Sem 3">Semester 3</option>
+                            <option value="Sem 4">Semester 4</option>
+                            <option value="Sem 5">Semester 5</option>
+                            <option value="Sem 6">Semester 6</option>
+                            <option value="Sem 7">Semester 7</option>
+                            <option value="Sem 8">Semester 8</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notes Grid Container -->
+            <section class="files-container">
+                <div class="section-header-flex">
+                    <h2><i class="fas fa-folder-open"></i> Shared Student Notes (<span id="notesCount">0</span>)</h2>
+                    <div class="sort-controls">
+                        <label for="sortBySelect"><i class="fas fa-sort"></i> Sort:</label>
+                        <select id="sortBySelect" class="sort-dropdown">
+                            <option value="newest">Newest First</option>
+                            <option value="downloads">Most Downloaded</option>
+                            <option value="title">Title (A-Z)</option>
+                            <option value="size">File Size</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="files-grid" id="filesGrid">
+                    <!-- Dynamic note cards inserted via script.js -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div class="preview-modal" id="previewModal" role="dialog" aria-labelledby="previewTitle" aria-hidden="true">
+        <div class="preview-content">
+            <div class="preview-header">
+                <h3 id="previewTitle"><i class="fas fa-eye"></i> Note Preview</h3>
+                <div class="preview-header-actions">
+                    <button class="btn btn-sm btn-primary" id="modalDownloadBtn">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button class="close-preview" id="closePreview" aria-label="Close preview">
                         <i class="fas fa-times"></i>
                     </button>
-                    <h2><i class="fas fa-envelope"></i> Contact Us</h2>
-                    <p>Have questions, feedback, or need support? Fill out the form below and we'll get back to you as
-                        soon as possible.</p>
-
-                    <form class="contact-form" id="contactForm">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="contactName">Your Name</label>
-                                <input type="text" id="contactName" class="form-control" placeholder="Enter your name"
-                                    required>
-                            </div>
-                            <div class="form-group">
-                                <label for="contactEmail">Your Email</label>
-                                <input type="email" id="contactEmail" class="form-control"
-                                    placeholder="Enter your email" required>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="contactSubject">Subject</label>
-                            <input type="text" id="contactSubject" class="form-control" placeholder="Enter subject"
-                                required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="contactMessage">Message</label>
-                            <textarea id="contactMessage" class="form-control" rows="5" placeholder="Enter your message"
-                                required></textarea>
-                        </div>
-
-                        <div class="contact-buttons">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-paper-plane"></i> Send Message
-                            </button>
-                        </div>
-                    </form>
                 </div>
+            </div>
+            <div class="preview-body" id="previewBody">
+                <!-- Preview rendered here -->
             </div>
         </div>
     </div>
 
-    <!-- Notification -->
-    <div class="notification" id="notification">
-        <i class="fas fa-check-circle"></i>
-        <span id="notificationText">Operation completed successfully!</span>
+    <!-- Delete Confirmation Dialog -->
+    <div class="preview-modal" id="deleteConfirmModal" role="dialog" aria-hidden="true">
+        <div class="preview-content" style="max-width: 450px; text-align: center;">
+            <div style="font-size: 48px; color: #ef4444; margin-bottom: 15px;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 style="margin-bottom: 10px;">Confirm Note Deletion</h3>
+            <p style="color: var(--text-light); margin-bottom: 20px;" id="deleteConfirmText">Are you sure you want to delete this note?</p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn"><i class="fas fa-trash"></i> Delete Note</button>
+            </div>
+        </div>
     </div>
 
+    <!-- Contact Support Modal -->
+    <div class="contact-modal" id="contactModal" role="dialog" aria-hidden="true">
+        <div class="contact-content">
+            <button class="close-contact" id="closeContact" title="Close modal">
+                <i class="fas fa-times"></i>
+            </button>
+            <h2><i class="fas fa-paper-plane"></i> Contact & Feedback</h2>
+            <p>Have suggestions or need help with student notes? Send us a message!</p>
+
+            <form class="contact-form" id="contactForm">
+                <div class="form-group">
+                    <label for="contactName">Your Name</label>
+                    <input type="text" id="contactName" class="form-control" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactSubject">Subject</label>
+                    <input type="text" id="contactSubject" class="form-control" placeholder="Subject" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactMessage">Message</label>
+                    <textarea id="contactMessage" class="form-control" rows="4" placeholder="Write your message here..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-paper-plane"></i> Send Message
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Floating Toast Notification System -->
+    <div class="notification" id="notification" role="status" aria-live="polite">
+        <i class="fas fa-check-circle" id="notificationIcon"></i>
+        <span id="notificationText">Operation completed successfully</span>
+    </div>
+
+    <!-- Application Configurations and Frontend Scripts -->
+    <script src="firebase-config.js"></script>
     <script src="script.js"></script>
 </body>
 

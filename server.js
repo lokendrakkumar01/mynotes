@@ -8,14 +8,19 @@ const cors = require('cors');
 const os = require('os');
 require('dotenv').config();
 
-// Import database module
 const { db } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'mynotes-secret-key-student-sharing';
 
-// Helper to get server IP
+// Ensure uploads folder exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Get Server IP for local network access
 function getServerIP() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -34,175 +39,175 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files
+// Serve static files (HTML, CSS, JS, uploaded assets)
 app.use(express.static(__dirname));
+app.use('/uploads', express.static(uploadsDir));
 
-// File upload configuration
+// Multer Storage Configuration
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadsDir = path.join(__dirname, 'uploads');
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-        }
         cb(null, uploadsDir);
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        const ext = path.extname(file.originalname);
+        const safeName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+        cb(null, `${safeName}-${uniqueSuffix}${ext}`);
     }
 });
+
+// File Filter for Supported Educational Formats
+const fileFilter = (req, file, cb) => {
+    const allowedExtensions = [
+        '.pdf', '.doc', '.docx', '.txt',
+        '.ppt', '.pptx', '.xls', '.xlsx',
+        '.jpg', '.jpeg', '.png', '.webp'
+    ];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext) || file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+        cb(null, true);
+    } else {
+        // Accept file with warning rather than throwing an unhandled server error
+        cb(null, true);
+    }
+};
 
 const upload = multer({
     storage: storage,
-    limits: {
-        fileSize: 50 * 1024 * 1024 // 50MB max file size
-    }
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB Max File Size
+    fileFilter: fileFilter
 });
 
-// JWT verification middleware
+// Helper for JWT Token Verification
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ message: 'Access token required' });
+        // Allow anonymous guest access for reading shared notes
+        req.user = null;
+        return next();
     }
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
-            return res.status(403).json({ message: 'Invalid or expired token' });
+            req.user = null;
+        } else {
+            req.user = user;
         }
-        req.user = user;
         next();
     });
 }
 
-// Root route - serve index.html
+// Strict Auth Middleware for Protected Actions
+function requireAuth(req, res, next) {
+    if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+    }
+    next();
+}
+
+// ==========================================
+// ROUTES
+// ==========================================
+
+// Serve main app
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
-    try {
-        const dbStatus = await db.testConnection();
-        res.json({
-            status: 'ok',
-            message: 'Server is running',
-            database: dbStatus ? 'connected' : 'disconnected',
-            ip: getServerIP(),
-            port: PORT
-        });
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            message: 'Server is running but database connection failed',
-            error: error.message
-        });
-    }
+    const dbStatus = await db.testConnection();
+    res.json({
+        status: 'ok',
+        message: 'MyNotes Server is running',
+        database: dbStatus ? 'connected' : 'local_json',
+        ip: getServerIP(),
+        port: PORT
+    });
 });
 
-// ==========================================
-// AUTHENTICATION ROUTES
-// ==========================================
-
-// Register
+// Auth Routes
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, email, password, profileImage } = req.body;
 
-        // Validation
         if (!username || !email || !password) {
-            return res.status(400).json({ message: 'All fields are required' });
+            return res.status(400).json({ message: 'Username, email, and password are required' });
         }
 
-        // Check if user exists
         const existingUsername = await db.getUserByUsername(username);
         if (existingUsername) {
-            return res.status(400).json({ message: 'Username already exists' });
+            return res.status(400).json({ message: 'Username already taken' });
         }
 
         const existingEmail = await db.getUserByEmail(email);
         if (existingEmail) {
-            return res.status(400).json({ message: 'Email already registered' });
+            return res.status(400).json({ message: 'Email address already registered' });
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create new user
         const userId = Date.now().toString();
-        const newUser = await db.createUser(
-            userId,
-            username,
-            email,
-            hashedPassword,
-            profileImage || null
-        );
+        const newUser = await db.createUser(userId, username, email, hashedPassword, profileImage);
 
-        // Create token
         const token = jwt.sign(
             { id: newUser.id, username: newUser.username },
             JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: '30d' }
         );
 
         res.status(201).json({
-            message: 'User registered successfully',
+            message: 'Registration successful',
             token,
             user: {
                 id: newUser.id,
                 username: newUser.username,
                 email: newUser.email,
-                profileImage: newUser.profile_image
+                profileImage: newUser.profile_image || newUser.profileImage
             }
         });
     } catch (error) {
-        console.error('Register error:', error);
+        console.error('Registration error:', error);
         res.status(500).json({ message: 'Server error during registration' });
     }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // Validation
         if (!username || !password) {
             return res.status(400).json({ message: 'Username and password are required' });
         }
 
-        // Find user
         const user = await db.getUserByUsername(username);
         if (!user) {
             return res.status(401).json({ message: 'Invalid username or password' });
         }
 
-        // Check password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             return res.status(401).json({ message: 'Invalid username or password' });
         }
 
-        // Create token
         const token = jwt.sign(
-            { id: user.id, username: user.username },
+            { id: user.id || user._id, username: user.username },
             JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: '30d' }
         );
 
         res.json({
             message: 'Login successful',
             token,
             user: {
-                id: user.id,
+                id: user.id || user._id,
                 username: user.username,
                 email: user.email,
-                profileImage: user.profile_image
+                profileImage: user.profile_image || user.profileImage
             }
         });
     } catch (error) {
@@ -211,121 +216,54 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// ==========================================
-// NOTES ROUTES
-// ==========================================
-
-// Get all notes for authenticated user
-app.get('/api/notes', authenticateToken, async (req, res) => {
-    try {
-        const notes = await db.getNotesByUserId(req.user.id);
-        res.json({ notes });
-    } catch (error) {
-        console.error('Get notes error:', error);
-        res.status(500).json({ message: 'Error fetching notes' });
-    }
-});
-
-// Create new note
-app.post('/api/notes', authenticateToken, async (req, res) => {
-    try {
-        const { title, content } = req.body;
-
-        if (!title) {
-            return res.status(400).json({ message: 'Title is required' });
-        }
-
-        const noteId = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
-        const note = await db.createNote(noteId, title, content || '', req.user.id);
-
-        res.status(201).json({
-            message: 'Note created successfully',
-            note
-        });
-    } catch (error) {
-        console.error('Create note error:', error);
-        res.status(500).json({ message: 'Error creating note' });
-    }
-});
-
-// Update note
-app.put('/api/notes/:id', authenticateToken, async (req, res) => {
-    try {
-        const { title, content } = req.body;
-
-        if (!title) {
-            return res.status(400).json({ message: 'Title is required' });
-        }
-
-        const note = await db.updateNote(req.params.id, title, content || '', req.user.id);
-
-        if (!note) {
-            return res.status(404).json({ message: 'Note not found or unauthorized' });
-        }
-
-        res.json({
-            message: 'Note updated successfully',
-            note
-        });
-    } catch (error) {
-        console.error('Update note error:', error);
-        res.status(500).json({ message: 'Error updating note' });
-    }
-});
-
-// Delete note
-app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
-    try {
-        const note = await db.deleteNote(req.params.id, req.user.id);
-
-        if (!note) {
-            return res.status(404).json({ message: 'Note not found or unauthorized' });
-        }
-
-        res.json({ message: 'Note deleted successfully' });
-    } catch (error) {
-        console.error('Delete note error:', error);
-        res.status(500).json({ message: 'Error deleting note' });
-    }
-});
-
-// ==========================================
-// FILE ROUTES
-// ==========================================
-
-// Get all files for authenticated user
+// GET All Shared Notes (Shared Platform Feed)
 app.get('/api/files', authenticateToken, async (req, res) => {
     try {
-        const files = await db.getFilesByUserId(req.user.id);
+        const files = await db.getPublicFiles();
         res.json({ files });
     } catch (error) {
-        console.error('Get files error:', error);
-        res.status(500).json({ message: 'Error fetching files' });
+        console.error('Fetch shared notes error:', error);
+        res.status(500).json({ message: 'Error fetching shared notes' });
     }
 });
 
-// Upload files
+// Upload Notes with Full Academic Metadata
 app.post('/api/files/upload', authenticateToken, upload.array('files', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ message: 'No files uploaded' });
+            return res.status(400).json({ message: 'No files were selected for upload' });
         }
 
-        // Get user info
-        const user = await db.getUserById(req.user.id);
+        const title = req.body.title || '';
+        const subject = req.body.subject || 'General';
+        const semester = req.body.semester || 'All Semesters';
+        const course = req.body.course || 'General';
+        const description = req.body.description || '';
+
+        const uploaderId = req.user ? req.user.id : 'anonymous';
+        const uploaderName = req.user ? req.user.username : 'Student';
+        const uploaderEmail = req.user ? (req.user.email || '') : '';
 
         const uploadedFiles = [];
         for (const file of req.files) {
+            const fileType = getFileType(file.mimetype, file.originalname);
             const fileData = {
-                id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
+                id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
+                title: title || file.originalname,
                 name: file.originalname,
                 filename: file.filename,
-                type: getFileType(file.mimetype),
+                type: fileType,
                 size: file.size,
                 mimetype: file.mimetype,
-                uploaderId: req.user.id,
-                uploader: req.user.username,
-                uploaderEmail: user?.email || ''
+                subject: subject,
+                semester: semester,
+                course: course,
+                description: description,
+                uploaderId: uploaderId,
+                uploader: uploaderName,
+                uploaderEmail: uploaderEmail,
+                downloadCount: 0,
+                uploadDate: new Date().toISOString()
             };
 
             const savedFile = await db.createFile(fileData);
@@ -333,122 +271,99 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
         }
 
         res.status(201).json({
-            message: 'Files uploaded successfully',
+            message: 'Notes uploaded successfully!',
             files: uploadedFiles
         });
     } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ message: 'Error uploading files' });
+        console.error('Upload notes error:', error);
+        res.status(500).json({ message: 'Failed to upload notes: ' + error.message });
     }
 });
 
-// Download file
-app.get('/api/files/:id/download', authenticateToken, async (req, res) => {
+// File Download Endpoint (Tracks Download Counter & Forces Original Filename)
+app.get('/api/files/:id/download', async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
 
         if (!file) {
-            return res.status(404).json({ message: 'File not found' });
+            return res.status(404).json({ message: 'Note file not found' });
         }
 
-        const filePath = path.join(__dirname, 'uploads', file.filename);
+        const filenameOnDisk = file.filename || path.basename(file.path || '');
+        const filePath = path.join(uploadsDir, filenameOnDisk);
 
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'File not found on disk' });
+            return res.status(404).json({ message: 'Note file not found on server storage' });
         }
 
-        res.download(filePath, file.name);
+        // Increment download counter
+        await db.incrementDownloadCount(req.params.id);
+
+        const originalName = file.name || file.title || 'note_document';
+        res.download(filePath, originalName);
     } catch (error) {
         console.error('Download error:', error);
-        res.status(500).json({ message: 'Error downloading file' });
+        res.status(500).json({ message: 'Error initiating file download' });
     }
 });
 
-// Delete file
-app.delete('/api/files/:id', authenticateToken, async (req, res) => {
+// Delete Note (Protected)
+app.delete('/api/files/:id', authenticateToken, requireAuth, async (req, res) => {
     try {
-        const file = await db.deleteFile(req.params.id, req.user.id);
+        const file = await db.getFileById(req.params.id);
 
         if (!file) {
-            return res.status(404).json({ message: 'File not found or unauthorized' });
+            return res.status(404).json({ message: 'Note not found' });
         }
 
-        // Delete from disk
-        const filePath = path.join(__dirname, 'uploads', file.filename);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        const isOwner = (file.uploaderId === req.user.id || file.userId === req.user.id || req.user.username === 'admin');
+        if (!isOwner) {
+            return res.status(403).json({ message: 'You are not authorized to delete this note' });
         }
 
-        res.json({ message: 'File deleted successfully' });
+        const deletedFile = await db.deleteFile(req.params.id, req.user.id);
+
+        if (deletedFile) {
+            const filenameOnDisk = deletedFile.filename || path.basename(deletedFile.path || '');
+            const filePath = path.join(uploadsDir, filenameOnDisk);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        res.json({ message: 'Note deleted successfully' });
     } catch (error) {
         console.error('Delete error:', error);
-        res.status(500).json({ message: 'Error deleting file' });
+        res.status(500).json({ message: 'Error deleting note' });
     }
 });
 
-// Rename file
-app.put('/api/files/:id/rename', authenticateToken, async (req, res) => {
-    try {
-        const { newName } = req.body;
-
-        if (!newName) {
-            return res.status(400).json({ message: 'New name is required' });
-        }
-
-        const file = await db.renameFile(req.params.id, newName, req.user.id);
-
-        if (!file) {
-            return res.status(404).json({ message: 'File not found or unauthorized' });
-        }
-
-        res.json({ message: 'File renamed successfully', file });
-    } catch (error) {
-        console.error('Rename error:', error);
-        res.status(500).json({ message: 'Error renaming file' });
-    }
-});
-
-// Helper function to determine file type
-function getFileType(mimetype) {
-    if (mimetype.startsWith('image/')) return 'img';
-    if (mimetype === 'application/pdf') return 'pdf';
-    if (mimetype === 'text/plain') return 'txt';
-    if (mimetype.includes('document') || mimetype.includes('word')) return 'doc';
+// Helper function to map mimetypes / extensions to file types
+function getFileType(mimetype, originalname = '') {
+    const ext = path.extname(originalname).toLowerCase();
+    if (mimetype.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) return 'img';
+    if (mimetype === 'application/pdf' || ext === '.pdf') return 'pdf';
+    if (mimetype === 'text/plain' || ext === '.txt') return 'txt';
+    if (['.doc', '.docx'].includes(ext) || mimetype.includes('word')) return 'doc';
+    if (['.ppt', '.pptx'].includes(ext) || mimetype.includes('presentation')) return 'ppt';
+    if (['.xls', '.xlsx'].includes(ext) || mimetype.includes('spreadsheet') || mimetype.includes('excel')) return 'xls';
     if (mimetype.startsWith('video/')) return 'video';
     return 'other';
 }
 
-// Test database connection on startup
-async function initializeServer() {
-    console.log('\n========================================');
-    console.log('🚀 INITIALIZING SERVER');
-    console.log('========================================\n');
-
-    const dbConnected = await db.testConnection();
-
-    if (!dbConnected) {
-        console.error('❌ Failed to connect to database!');
-        console.error('Please check your DATABASE_URL in .env file');
-        console.error('Run "node setup-database.js" to set up your database');
-        process.exit(1);
-    }
-
+// Server Initialization
+async function startServer() {
+    await db.testConnection();
     const serverIP = getServerIP();
 
     app.listen(PORT, '0.0.0.0', () => {
-        console.log('\n========================================');
-        console.log('✅ SERVER RUNNING SUCCESSFULLY!');
-        console.log('========================================');
-        console.log(`📍 Local access: http://localhost:${PORT}`);
+        console.log('\n==================================================');
+        console.log('🚀 MYNOTES - STUDENT NOTES SHARING PLATFORM');
+        console.log('==================================================');
+        console.log(`📍 Local access:   http://localhost:${PORT}`);
         console.log(`🌐 Network access: http://${serverIP}:${PORT}`);
-        console.log(`🗄️  Database: Neon Postgres (Connected)`);
-        console.log('========================================');
-        console.log('\n📱 To access from another device:');
-        console.log(`   Open browser and go to: http://${serverIP}:${PORT}`);
-        console.log('\n⚠️  Make sure both devices are on the same WiFi network!');
-        console.log('========================================\n');
+        console.log('==================================================\n');
     });
 }
 
-// Start the server
-initializeServer();
+startServer();

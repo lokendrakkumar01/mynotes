@@ -1,3 +1,6 @@
+// MyNotes Platform Core JavaScript Engine
+// Supports Dual Mode: Firebase Cloud Storage (GitHub Pages & Live Web) + Node.js Express REST API
+
 // DOM Elements
 const loader = document.getElementById('loader');
 const connectionStatus = document.getElementById('connectionStatus');
@@ -20,6 +23,9 @@ const profileImageInput = document.getElementById('profileImageInput');
 const profileUploadBtn = document.getElementById('profileUploadBtn');
 const profilePlaceholder = document.getElementById('profilePlaceholder');
 const profileImage = document.getElementById('profileImage');
+const googleLoginBtn = document.getElementById('googleLoginBtn');
+const guestBtn = document.getElementById('guestBtn');
+
 const headerProfilePlaceholder = document.getElementById('headerProfilePlaceholder');
 const headerProfileImage = document.getElementById('headerProfileImage');
 const userName = document.getElementById('userName');
@@ -27,248 +33,191 @@ const userEmail = document.getElementById('userEmail');
 const logoutBtn = document.getElementById('logoutBtn');
 const contactBtn = document.getElementById('contactBtn');
 const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+
+// Upload Elements
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
+const noteTitle = document.getElementById('noteTitle');
+const noteSubject = document.getElementById('noteSubject');
+const noteCourse = document.getElementById('noteCourse');
+const noteSemester = document.getElementById('noteSemester');
+const noteDescription = document.getElementById('noteDescription');
+const selectedFilesBar = document.getElementById('selectedFilesBar');
+const selectedFilesCount = document.getElementById('selectedFilesCount');
+const startUploadBtn = document.getElementById('startUploadBtn');
+const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
 const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
+
+// Search & Filter Elements
 const searchInput = document.getElementById('searchInput');
-const filterButtons = document.querySelectorAll('.filter-btn');
+const typeFilterButtons = document.querySelectorAll('#typeFilterButtons .filter-btn');
+const subjectFilter = document.getElementById('subjectFilter');
+const semesterFilter = document.getElementById('semesterFilter');
+const sortBySelect = document.getElementById('sortBySelect');
 const filesGrid = document.getElementById('filesGrid');
+const notesCount = document.getElementById('notesCount');
+
+// Modals
 const previewModal = document.getElementById('previewModal');
 const closePreview = document.getElementById('closePreview');
 const previewTitle = document.getElementById('previewTitle');
 const previewBody = document.getElementById('previewBody');
+const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+const deleteConfirmText = document.getElementById('deleteConfirmText');
+const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 const contactModal = document.getElementById('contactModal');
 const closeContact = document.getElementById('closeContact');
 const contactForm = document.getElementById('contactForm');
 const notification = document.getElementById('notification');
 const notificationText = document.getElementById('notificationText');
+const notificationIcon = document.getElementById('notificationIcon');
 
-// State
+// Application State
 let currentUser = null;
-let files = [];
-let currentFilter = 'all';
-let currentSearch = '';
-let profileImageData = null;
+let notesFeed = [];
+let pendingFiles = [];
+let activeTypeFilter = 'all';
+let activeSubjectFilter = 'all';
+let activeSemesterFilter = 'all';
+let activeSearchQuery = '';
+let activeSort = 'newest';
+let pendingDeleteId = null;
+let activePreviewNote = null;
 let authToken = localStorage.getItem('authToken') || null;
 
-// Detect if running on GitHub Pages
+// Determine Backend Provider Mode
 const isGitHubPages = window.location.hostname.includes('github.io');
+const isFirebaseAvailable = (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0);
 
-// API URL
-const API_BASE_URL = isGitHubPages
-    ? null // No backend on GitHub Pages
-    : (window.location.protocol === 'file:'
-        ? 'http://localhost:3000/api'
-        : `${window.location.protocol}//${window.location.hostname}:3000/api`);
+const API_BASE_URL = (window.location.protocol === 'file:'
+    ? 'http://localhost:3000/api'
+    : `${window.location.protocol}//${window.location.hostname}:3000/api`);
 
-console.log('Environment:', isGitHubPages ? 'GitHub Pages' : 'Local');
-console.log('API Base URL:', API_BASE_URL || 'N/A');
+console.log('MyNotes Platform Initializing...');
+console.log('Environment:', isGitHubPages ? 'GitHub Pages' : 'Local / Custom Server');
+console.log('Cloud Provider:', isFirebaseAvailable ? 'Firebase Enabled' : 'Local Node API');
 
-// Initialize
+// Initialize Application
 function init() {
-    console.log('Initializing app...');
-
-    // Check if on GitHub Pages
-    if (isGitHubPages) {
-        showGitHubPagesMessage();
-        hideLoader();
-        return;
-    }
-
     setupEventListeners();
     loadThemePreference();
-    checkLoginStatus();
-    testConnection();
+    checkAuthSession();
+    loadSharedNotesFeed();
     hideLoader();
-}
-
-function showGitHubPagesMessage() {
-    if (loader) loader.style.display = 'none';
-    if (connectionStatus) connectionStatus.style.display = 'none';
-
-    if (loginContainer) {
-        loginContainer.innerHTML = `
-            <div class="login-form" style="max-width: 600px; text-align: center; padding: 30px;">
-                <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
-                <h2 style="color: #ef4444; margin-bottom: 20px;">
-                    GitHub Pages - Demo Only
-                </h2>
-                
-                <div style="background: #fee2e2; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
-                    <p style="margin-bottom: 15px; font-size: 16px; line-height: 1.6;">
-                        <strong>यह application को चलाने के लिए backend server की जरूरत है।</strong>
-                    </p>
-                    <p style="margin-bottom: 0; font-size: 14px; color: #991b1b;">
-                        GitHub Pages सिर्फ static files host कर सकता है - Node.js server नहीं चला सकता।
-                    </p>
-                </div>
-                
-                <div style="background: #dbeafe; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
-                    <h3 style="color: #1e40af; margin-bottom: 15px; font-size: 18px;">
-                        📱 Locally कैसे चलाएं:
-                    </h3>
-                    <ol style="margin-left: 20px; line-height: 1.8; font-size: 14px;">
-                        <li>Repository clone करें</li>
-                        <li><code style="background: white; padding: 3px 8px; border-radius: 4px;">npm install</code> चलाएं</li>
-                        <li><code style="background: white; padding: 3px 8px; border-radius: 4px;">node server.js</code> चलाएं</li>
-                        <li>Browser में <code style="background: white; padding: 3px 8px; border-radius: 4px;">localhost:3000</code> खोलें</li>
-                    </ol>
-                </div>
-                
-                <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <p style="margin: 0; color: #166534; font-size: 14px;">
-                        💡 <strong>Full features के लिए:</strong><br>
-                        Computer पर locally run करें
-                    </p>
-                </div>
-                
-                <a href="https://github.com/lokendrakkumar01/mynotes" 
-                   class="btn btn-primary" 
-                   target="_blank"
-                   style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 12px 24px;">
-                    <i class="fab fa-github"></i> GitHub Repository
-                </a>
-                
-                <p style="margin-top: 20px; color: #64748b; font-size: 13px;">
-                    इस page को computer पर खोलें और locally run करें।
-                </p>
-            </div>
-        `;
-        loginContainer.style.display = 'flex';
-    }
-
-    // Also hide app container completely
-    if (appContainer) appContainer.style.display = 'none';
 }
 
 function hideLoader() {
     setTimeout(() => {
         if (loader) {
             loader.style.opacity = '0';
-            setTimeout(() => {
-                loader.style.display = 'none';
-            }, 300);
+            setTimeout(() => loader.style.display = 'none', 300);
         }
-    }, 1000);
+    }, 400);
 }
 
-function checkLoginStatus() {
+// Authentication Session Manager
+function checkAuthSession() {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
         try {
             currentUser = JSON.parse(savedUser);
-            showApp();
-        } catch (error) {
-            console.error('Error parsing saved user:', error);
-            localStorage.removeItem('currentUser');
-            localStorage.removeItem('authToken');
-            showLogin();
+            showAppView();
+        } catch (e) {
+            showLoginView();
         }
     } else {
-        showLogin();
+        // Default to Guest Student browsing mode so students aren't blocked from notes
+        currentUser = { id: 'guest-' + Date.now(), username: 'Guest Student', email: 'student@mynotes.edu', isGuest: true };
+        showAppView();
     }
 }
 
 function setupEventListeners() {
+    // Auth listeners
     loginForm.addEventListener('submit', handleLogin);
     registerForm.addEventListener('submit', handleRegister);
-    registerLink.addEventListener('click', showRegisterForm);
-    loginLink.addEventListener('click', showLoginForm);
-    profileUploadBtn.addEventListener('click', () => profileImageInput.click());
-    profileImageInput.addEventListener('change', handleProfileImageUpload);
-    logoutBtn.addEventListener('click', handleLogout);
-    contactBtn.addEventListener('click', () => contactModal.classList.add('active'));
-    closeContact.addEventListener('click', () => contactModal.classList.remove('active'));
-    contactForm.addEventListener('submit', handleContactForm);
-    themeToggle.addEventListener('click', toggleTheme);
-    uploadArea.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', handleFileUpload);
+    registerLink.addEventListener('click', (e) => { e.preventDefault(); showRegisterForm(); });
+    loginLink.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+    if (guestBtn) guestBtn.addEventListener('click', handleGuestAccess);
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
+    // Profile upload
+    if (profileUploadBtn) profileUploadBtn.addEventListener('click', () => profileImageInput.click());
+    if (profileImageInput) profileImageInput.addEventListener('change', handleProfilePhotoSelected);
 
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
+    // Theme & Contact
+    if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+    if (contactBtn) contactBtn.addEventListener('click', () => contactModal.classList.add('active'));
+    if (closeContact) closeContact.addEventListener('click', () => contactModal.classList.remove('active'));
+    if (contactForm) contactForm.addEventListener('submit', handleContactSubmit);
 
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
+    // Upload Dropzone listeners
+    if (uploadArea) {
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFilesSelected(e.dataTransfer.files);
+        });
+    }
 
-    searchInput.addEventListener('input', (e) => {
-        currentSearch = e.target.value.toLowerCase();
-        renderFiles();
-    });
+    if (fileInput) fileInput.addEventListener('change', (e) => handleFilesSelected(e.target.files));
+    if (startUploadBtn) startUploadBtn.addEventListener('click', processFileUploads);
+    if (cancelSelectionBtn) cancelSelectionBtn.addEventListener('click', clearPendingSelection);
 
-    filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            currentFilter = button.dataset.filter;
-            renderFiles();
+    // Search, Filter & Sort listeners
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            activeSearchQuery = e.target.value.toLowerCase().trim();
+            renderNotesFeed();
+        });
+    }
+
+    typeFilterButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            typeFilterButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeTypeFilter = btn.dataset.filter;
+            renderNotesFeed();
         });
     });
 
-    closePreview.addEventListener('click', () => {
-        previewModal.classList.remove('active');
-    });
+    if (subjectFilter) subjectFilter.addEventListener('change', (e) => { activeSubjectFilter = e.target.value; renderNotesFeed(); });
+    if (semesterFilter) semesterFilter.addEventListener('change', (e) => { activeSemesterFilter = e.target.value; renderNotesFeed(); });
+    if (sortBySelect) sortBySelect.addEventListener('change', (e) => { activeSort = e.target.value; renderNotesFeed(); });
 
-    previewModal.addEventListener('click', (e) => {
-        if (e.target === previewModal) {
-            previewModal.classList.remove('active');
-        }
-    });
+    // Modals
+    if (closePreview) closePreview.addEventListener('click', () => previewModal.classList.remove('active'));
+    if (previewModal) previewModal.addEventListener('click', (e) => { if (e.target === previewModal) previewModal.classList.remove('active'); });
+    if (modalDownloadBtn) modalDownloadBtn.addEventListener('click', () => { if (activePreviewNote) downloadNoteFile(activePreviewNote); });
 
-    contactModal.addEventListener('click', (e) => {
-        if (e.target === contactModal) {
-            contactModal.classList.remove('active');
-        }
-    });
+    if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', () => deleteConfirmModal.classList.remove('active'));
+    if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', executeNoteDeletion);
 }
 
-function showLoginForm(e) {
-    e.preventDefault();
+// Authentication Handlers
+function showLoginForm() {
     loginFormContainer.style.display = 'block';
     registerFormContainer.style.display = 'none';
-    resetRegisterForm();
 }
 
-function showRegisterForm(e) {
-    e.preventDefault();
+function showRegisterForm() {
     loginFormContainer.style.display = 'none';
     registerFormContainer.style.display = 'block';
 }
 
-function resetRegisterForm() {
-    registerForm.reset();
-    profileImageData = null;
-    profilePlaceholder.style.display = 'flex';
-    profileImage.style.display = 'none';
-}
-
-function handleProfileImageUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-        showNotification('Please select an image file', true);
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        profileImageData = e.target.result;
-        profilePlaceholder.style.display = 'none';
-        profileImage.src = profileImageData;
-        profileImage.style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+function handleGuestAccess() {
+    currentUser = { id: 'guest-' + Date.now(), username: 'Guest Student', email: 'student@mynotes.edu', isGuest: true };
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    showAppView();
+    showNotification('Welcome! Browsing shared notes as Guest Student.');
 }
 
 async function handleLogin(e) {
@@ -287,7 +236,6 @@ async function handleLogin(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-
         const data = await response.json();
 
         if (response.ok) {
@@ -295,15 +243,17 @@ async function handleLogin(e) {
             currentUser = data.user;
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            loadUserFiles();
-            showApp();
-            showNotification(`Welcome back, ${username}!`);
+            showAppView();
+            showNotification(`Welcome back, ${currentUser.username}!`);
         } else {
             showNotification(data.message || 'Login failed', true);
         }
-    } catch (error) {
-        console.error('Login error:', error);
-        showNotification('Cannot connect to server. Make sure it is running!', true);
+    } catch (err) {
+        // Fallback local login for offline/guest
+        currentUser = { id: 'user-' + Date.now(), username, email: `${username}@mynotes.edu` };
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        showAppView();
+        showNotification(`Logged in as ${username}`);
     }
 }
 
@@ -315,10 +265,9 @@ async function handleRegister(e) {
     const confirmPassword = regConfirmPasswordInput.value;
 
     if (!username || !email || !password) {
-        showNotification('Please fill in all fields', true);
+        showNotification('Please fill in all required fields', true);
         return;
     }
-
     if (password !== confirmPassword) {
         showNotification('Passwords do not match', true);
         return;
@@ -328,9 +277,8 @@ async function handleRegister(e) {
         const response = await fetch(`${API_BASE_URL}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password, profileImage: profileImageData })
+            body: JSON.stringify({ username, email, password })
         });
-
         const data = await response.json();
 
         if (response.ok) {
@@ -338,15 +286,16 @@ async function handleRegister(e) {
             currentUser = data.user;
             localStorage.setItem('authToken', authToken);
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            loadUserFiles();
-            showApp();
+            showAppView();
             showNotification(`Account created! Welcome, ${username}!`);
         } else {
             showNotification(data.message || 'Registration failed', true);
         }
-    } catch (error) {
-        console.error('Register error:', error);
-        showNotification('Cannot connect to server. Make sure it is running!', true);
+    } catch (err) {
+        currentUser = { id: 'user-' + Date.now(), username, email };
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        showAppView();
+        showNotification(`Welcome to MyNotes, ${username}!`);
     }
 }
 
@@ -355,361 +304,624 @@ function handleLogout() {
     authToken = null;
     localStorage.removeItem('currentUser');
     localStorage.removeItem('authToken');
-    files = [];
-    showLogin();
-    showNotification('You have been logged out');
+    showLoginView();
+    showNotification('Logged out successfully');
 }
 
-function handleContactForm(e) {
-    e.preventDefault();
-    showNotification('Thank you for your message! We will get back to you soon.');
-    contactModal.classList.remove('active');
-    contactForm.reset();
+function handleProfilePhotoSelected(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        profilePlaceholder.style.display = 'none';
+        profileImage.src = evt.target.result;
+        profileImage.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
 }
 
-function showLogin() {
+function showLoginView() {
     loginContainer.style.display = 'flex';
     appContainer.style.display = 'none';
-    loginFormContainer.style.display = 'block';
-    registerFormContainer.style.display = 'none';
-    usernameInput.value = '';
-    passwordInput.value = '';
-    resetRegisterForm();
 }
 
-function showApp() {
+function showAppView() {
     loginContainer.style.display = 'none';
     appContainer.style.display = 'block';
 
-    userName.textContent = currentUser.username;
-    userEmail.textContent = currentUser.email;
-
-    if (currentUser.profileImage) {
-        headerProfilePlaceholder.style.display = 'none';
-        headerProfileImage.src = currentUser.profileImage;
-        headerProfileImage.style.display = 'block';
-    } else {
-        headerProfilePlaceholder.style.display = 'flex';
-        headerProfileImage.style.display = 'none';
+    if (currentUser) {
+        userName.textContent = currentUser.username;
+        userEmail.textContent = currentUser.email;
     }
-
-    renderFiles();
+    renderNotesFeed();
 }
 
-function toggleTheme() {
-    document.body.classList.toggle('dark-mode');
-    localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
-}
+// File Selection & Upload System
+function handleFilesSelected(fileList) {
+    if (!fileList || fileList.length === 0) return;
 
-function loadThemePreference() {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-    }
-}
-
-function handleFileUpload(e) {
-    handleFiles(e.target.files);
-    fileInput.value = '';
-}
-
-async function handleFiles(fileList) {
-    if (fileList.length === 0) return;
-
-    const formData = new FormData();
-    Array.from(fileList).forEach(file => {
-        formData.append('files', file);
+    const validFiles = Array.from(fileList).filter(file => {
+        if (file.size > 50 * 1024 * 1024) {
+            showNotification(`File ${file.name} exceeds 50MB limit`, true);
+            return false;
+        }
+        return true;
     });
+
+    if (validFiles.length === 0) return;
+
+    pendingFiles = validFiles;
+    selectedFilesCount.textContent = `${pendingFiles.length} file(s) selected for upload`;
+    selectedFilesBar.style.display = 'flex';
+
+    if (!noteTitle.value) {
+        noteTitle.value = pendingFiles[0].name.replace(/\.[^/.]+$/, "");
+    }
+}
+
+function clearPendingSelection() {
+    pendingFiles = [];
+    fileInput.value = '';
+    selectedFilesBar.style.display = 'none';
+}
+
+async function processFileUploads() {
+    if (pendingFiles.length === 0) return;
+
+    const title = noteTitle.value.trim() || pendingFiles[0].name;
+    const subject = noteSubject.value;
+    const course = noteCourse.value;
+    const semester = noteSemester.value;
+    const description = noteDescription.value.trim();
 
     progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
+    progressBar.style.width = '10%';
+    progressText.textContent = 'Uploading notes to shared storage...';
 
-    try {
-        const xhr = new XMLHttpRequest();
+    if (isFirebaseAvailable) {
+        // Firebase Cloud Storage & Firestore Integration for Live Shared Platform
+        try {
+            const storageRef = firebase.storage().ref();
+            const dbRef = firebase.firestore().collection('notes');
+            let completed = 0;
 
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                progressBar.style.width = percentComplete + '%';
-                progressText.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+            for (const file of pendingFiles) {
+                const fileRef = storageRef.child(`shared_notes/${Date.now()}_${file.name}`);
+                const uploadTask = fileRef.put(file);
+
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const percent = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        progressBar.style.width = `${percent}%`;
+                    },
+                    (error) => {
+                        console.error('Firebase upload error:', error);
+                        showNotification('Upload failed: ' + error.message, true);
+                        progressContainer.style.display = 'none';
+                    },
+                    async () => {
+                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                        const noteRecord = {
+                            title: title,
+                            name: file.name,
+                            url: downloadURL,
+                            type: getFileTypeCategory(file.type, file.name),
+                            mimetype: file.type || 'application/octet-stream',
+                            size: file.size,
+                            subject: subject,
+                            course: course,
+                            semester: semester,
+                            description: description,
+                            uploader: currentUser ? currentUser.username : 'Student',
+                            uploaderId: currentUser ? currentUser.id : 'anonymous',
+                            downloadCount: 0,
+                            uploadDate: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+
+                        await dbRef.add(noteRecord);
+                        completed++;
+                        if (completed === pendingFiles.length) {
+                            progressContainer.style.display = 'none';
+                            clearPendingSelection();
+                            resetUploadForm();
+                            showNotification('Notes uploaded to shared storage!');
+                            loadSharedNotesFeed();
+                        }
+                    }
+                );
             }
-        });
+        } catch (err) {
+            console.error('Cloud upload error:', err);
+            fallbackLocalUpload(title, subject, course, semester, description);
+        }
+    } else {
+        // Local Node Server Upload API
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('subject', subject);
+        formData.append('course', course);
+        formData.append('semester', semester);
+        formData.append('description', description);
 
-        xhr.addEventListener('load', () => {
-            if (xhr.status === 201) {
-                loadUserFiles();
-                showNotification(`${fileList.length} file(s) uploaded successfully!`);
-            } else {
-                showNotification('Upload failed', true);
-            }
-            setTimeout(() => {
+        pendingFiles.forEach(file => formData.append('files', file));
+
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressText.textContent = `Uploading... ${percent}%`;
+                }
+            });
+
+            xhr.addEventListener('load', () => {
                 progressContainer.style.display = 'none';
-                progressBar.style.width = '0%';
-            }, 1000);
-        });
+                if (xhr.status === 201 || xhr.status === 200) {
+                    clearPendingSelection();
+                    resetUploadForm();
+                    showNotification(`${pendingFiles.length} note file(s) uploaded successfully!`);
+                    loadSharedNotesFeed();
+                } else {
+                    showNotification('Upload failed on server', true);
+                }
+            });
 
-        xhr.addEventListener('error', () => {
-            showNotification('Upload failed', true);
+            xhr.addEventListener('error', () => {
+                progressContainer.style.display = 'none';
+                fallbackLocalUpload(title, subject, course, semester, description);
+            });
+
+            xhr.open('POST', `${API_BASE_URL}/files/upload`);
+            if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+            xhr.send(formData);
+        } catch (err) {
             progressContainer.style.display = 'none';
-        });
-
-        xhr.open('POST', `${API_BASE_URL}/files/upload`);
-        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
-        xhr.send(formData);
-    } catch (error) {
-        console.error('Upload error:', error);
-        showNotification('Upload failed', true);
-        progressContainer.style.display = 'none';
+            fallbackLocalUpload(title, subject, course, semester, description);
+        }
     }
 }
 
-async function loadUserFiles() {
-    if (!authToken) return;
+function fallbackLocalUpload(title, subject, course, semester, description) {
+    // In-memory fallback if server is offline
+    pendingFiles.forEach(file => {
+        const fileUrl = URL.createObjectURL(file);
+        const record = {
+            id: 'note-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+            title: title || file.name,
+            name: file.name,
+            url: fileUrl,
+            content: fileUrl,
+            type: getFileTypeCategory(file.type, file.name),
+            size: file.size,
+            subject: subject,
+            course: course,
+            semester: semester,
+            description: description,
+            uploader: currentUser ? currentUser.username : 'Student',
+            uploaderId: currentUser ? currentUser.id : 'anonymous',
+            downloadCount: 0,
+            uploadDate: new Date().toLocaleDateString()
+        };
+        notesFeed.unshift(record);
+    });
+    progressContainer.style.display = 'none';
+    clearPendingSelection();
+    resetUploadForm();
+    showNotification('Notes saved locally!');
+    renderNotesFeed();
+}
 
+function resetUploadForm() {
+    noteTitle.value = '';
+    noteDescription.value = '';
+}
+
+// Fetch Shared Notes Feed Across Platform
+async function loadSharedNotesFeed() {
+    updateConnectionStatus('connecting', 'Connecting to notes feed...');
+
+    if (isFirebaseAvailable) {
+        try {
+            const snapshot = await firebase.firestore().collection('notes')
+                .orderBy('uploadDate', 'desc')
+                .get();
+
+            notesFeed = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    uploadDate: data.uploadDate ? (data.uploadDate.toDate ? data.uploadDate.toDate().toLocaleDateString() : 'Recent') : 'Recent',
+                    content: data.url
+                };
+            });
+            updateConnectionStatus('connected', 'Cloud Storage Connected');
+            renderNotesFeed();
+            return;
+        } catch (err) {
+            console.warn('Firebase feed fetch error:', err.message);
+        }
+    }
+
+    // Try Local REST API
     try {
-        const response = await fetch(`${API_BASE_URL}/files`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-
+        const response = await fetch(`${API_BASE_URL}/files`);
         if (response.ok) {
             const data = await response.json();
-            files = data.files.map(file => ({
-                id: file._id,
+            notesFeed = data.files.map(file => ({
+                id: file.id || file._id,
+                title: file.title || file.name,
                 name: file.name,
-                type: file.type,
-                size: formatFileSize(file.size),
-                content: `${API_BASE_URL}/files/${file._id}/download`,
-                uploadDate: new Date(file.uploadDate).toLocaleDateString(),
-                uploader: file.uploader,
-                uploaderEmail: file.uploaderEmail
+                type: file.type || getFileTypeCategory(file.mimetype, file.name),
+                size: file.size,
+                subject: file.subject || 'General',
+                course: file.course || 'General',
+                semester: file.semester || 'Sem 1',
+                description: file.description || '',
+                uploader: file.uploader || 'Student',
+                uploaderId: file.uploaderId || file.userId,
+                downloadCount: file.downloadCount || file.download_count || 0,
+                content: `${API_BASE_URL}/files/${file.id || file._id}/download`,
+                uploadDate: file.uploadDate ? new Date(file.uploadDate).toLocaleDateString() : 'Recent'
             }));
-            renderFiles();
+            updateConnectionStatus('connected', 'Connected to Express Backend');
+            renderNotesFeed();
+            return;
         }
-    } catch (error) {
-        console.error('Load files error:', error);
+    } catch (err) {
+        console.warn('Local API connect error:', err.message);
     }
+
+    updateConnectionStatus('connected', 'Local Notes Storage Ready');
+    renderNotesFeed();
 }
 
-function renderFiles() {
+// Render Notes Feed with Multi-Field Search & Filters
+function renderNotesFeed() {
+    if (!filesGrid) return;
     filesGrid.innerHTML = '';
 
-    const filteredFiles = files.filter(file => {
-        const matchesSearch = file.name.toLowerCase().includes(currentSearch);
-        const matchesFilter = currentFilter === 'all' || file.type === currentFilter;
-        return matchesSearch && matchesFilter;
+    const filtered = notesFeed.filter(note => {
+        // Multi-field search
+        const q = activeSearchQuery;
+        const matchesSearch = !q || (
+            (note.title && note.title.toLowerCase().includes(q)) ||
+            (note.name && note.name.toLowerCase().includes(q)) ||
+            (note.subject && note.subject.toLowerCase().includes(q)) ||
+            (note.course && note.course.toLowerCase().includes(q)) ||
+            (note.semester && note.semester.toLowerCase().includes(q)) ||
+            (note.description && note.description.toLowerCase().includes(q))
+        );
+
+        // Type filter
+        const matchesType = (activeTypeFilter === 'all') || (note.type === activeTypeFilter);
+        // Subject filter
+        const matchesSubject = (activeSubjectFilter === 'all') || (note.subject === activeSubjectFilter);
+        // Semester filter
+        const matchesSemester = (activeSemesterFilter === 'all') || (note.semester === activeSemesterFilter);
+
+        return matchesSearch && matchesType && matchesSubject && matchesSemester;
     });
 
-    if (filteredFiles.length === 0) {
+    // Sort notes
+    filtered.sort((a, b) => {
+        if (activeSort === 'downloads') return (b.downloadCount || 0) - (a.downloadCount || 0);
+        if (activeSort === 'title') return (a.title || a.name).localeCompare(b.title || b.name);
+        if (activeSort === 'size') return (b.size || 0) - (a.size || 0);
+        return 0; // newest first by default
+    });
+
+    if (notesCount) notesCount.textContent = filtered.length;
+
+    if (filtered.length === 0) {
         filesGrid.innerHTML = `
             <div class="empty-state">
-                <i class="fas fa-file-alt"></i>
-                <h3>No files found</h3>
-                <p>${currentSearch || currentFilter !== 'all' ? 'Try adjusting your search or filter' : 'Upload your first file to get started'}</p>
+                <i class="fas fa-book-open"></i>
+                <h3>No notes found matching criteria</h3>
+                <p>Try clearing your search term or adjusting category filters.</p>
             </div>
         `;
         return;
     }
 
-    filteredFiles.forEach(file => {
-        const fileCard = createFileCard(file);
-        filesGrid.appendChild(fileCard);
+    filtered.forEach(note => {
+        const card = createNoteCardElement(note);
+        filesGrid.appendChild(card);
     });
 }
 
-function createFileCard(file) {
+// Build Note Card Component
+function createNoteCardElement(note) {
     const card = document.createElement('div');
     card.className = 'file-card';
 
-    const fileIconClass = getFileIconClass(file.type);
+    const fileIconClass = getFileIcon(note.type);
+    const formattedSize = formatBytes(note.size);
 
     card.innerHTML = `
-        <div class="file-header">
-            <div class="file-icon ${file.type}">
-                <i class="${fileIconClass}"></i>
-            </div>
-            <div class="file-info">
-                <div class="file-name">${file.name}</div>
-                <div class="file-meta">
-                    <span>${file.size} • ${file.uploadDate}</span>
-                    <span class="file-uploader">By: ${file.uploader}</span>
+        <div class="file-card-top">
+            <div class="file-card-header">
+                <div class="file-type-icon ${escapeHTML(note.type)}">
+                    <i class="${fileIconClass}"></i>
+                </div>
+                <div class="file-title-block">
+                    <div class="note-title" title="${escapeHTML(note.title)}">${escapeHTML(note.title)}</div>
+                    <div class="original-filename"><i class="fas fa-paperclip"></i> ${escapeHTML(note.name)}</div>
                 </div>
             </div>
+
+            <div class="note-badges">
+                <span class="badge badge-subject">${escapeHTML(note.subject || 'General')}</span>
+                <span class="badge badge-semester">${escapeHTML(note.semester || 'Sem 1')}</span>
+                <span class="badge badge-course">${escapeHTML(note.course || 'B.Tech')}</span>
+                <span class="badge badge-size">${formattedSize}</span>
+            </div>
+
+            ${note.description ? `<p class="note-description">${escapeHTML(note.description)}</p>` : ''}
+
+            <div class="file-card-meta">
+                <span class="uploader-info"><i class="fas fa-user-circle"></i> ${escapeHTML(note.uploader || 'Student')}</span>
+                <span class="download-stat"><i class="fas fa-download"></i> ${note.downloadCount || 0} downloads</span>
+            </div>
         </div>
-        <div class="file-actions">
-            <button class="action-btn preview-btn">
+
+        <div class="file-card-actions">
+            <button type="button" class="btn btn-outline preview-btn">
                 <i class="fas fa-eye"></i> Preview
             </button>
-            <button class="action-btn download-btn">
+            <button type="button" class="btn btn-primary download-btn">
                 <i class="fas fa-download"></i> Download
             </button>
-            <button class="action-btn delete-btn">
-                <i class="fas fa-trash"></i> Delete
+            <button type="button" class="btn btn-outline share-btn" title="Share with friends">
+                <i class="fas fa-share-alt"></i> Share
+            </button>
+            <button type="button" class="btn btn-danger-outline delete-btn" title="Delete note">
+                <i class="fas fa-trash"></i>
             </button>
         </div>
     `;
 
-    card.querySelector('.preview-btn').addEventListener('click', () => previewFile(file));
-    card.querySelector('.download-btn').addEventListener('click', () => downloadFile(file));
-    card.querySelector('.delete-btn').addEventListener('click', () => deleteFile(file.id));
+    card.querySelector('.preview-btn').addEventListener('click', () => openNotePreview(note));
+    card.querySelector('.download-btn').addEventListener('click', () => downloadNoteFile(note));
+    card.querySelector('.share-btn').addEventListener('click', () => shareNoteLink(note));
+    card.querySelector('.delete-btn').addEventListener('click', () => promptNoteDeletion(note.id));
 
     return card;
 }
 
-function getFileIconClass(type) {
-    switch (type) {
-        case 'pdf': return 'fas fa-file-pdf';
-        case 'doc': return 'fas fa-file-word';
-        case 'txt': return 'fas fa-file-alt';
-        case 'img': return 'fas fa-file-image';
-        case 'video': return 'fas fa-file-video';
-        default: return 'fas fa-file';
-    }
-}
-
-function previewFile(file) {
-    previewTitle.textContent = `Preview: ${file.name}`;
+// File Previews
+function openNotePreview(note) {
+    activePreviewNote = note;
+    previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
     previewBody.innerHTML = '';
 
-    if (file.type === 'img') {
+    const noteUrl = note.content || note.url;
+
+    if (note.type === 'img') {
         const img = document.createElement('img');
-        img.src = file.content;
-        img.alt = file.name;
-        img.className = 'preview-image';
+        img.src = noteUrl;
+        img.alt = note.title;
         previewBody.appendChild(img);
-    } else if (file.type === 'pdf') {
+    } else if (note.type === 'pdf') {
         const iframe = document.createElement('iframe');
-        iframe.src = file.content;
-        iframe.width = '100%';
-        iframe.height = '500px';
+        iframe.src = noteUrl;
         previewBody.appendChild(iframe);
-    } else if (file.type === 'video') {
-        const video = document.createElement('video');
-        video.src = file.content;
-        video.controls = true;
-        video.className = 'preview-video';
-        previewBody.appendChild(video);
+    } else if (note.type === 'txt') {
+        fetch(noteUrl)
+            .then(res => res.text())
+            .then(text => {
+                const box = document.createElement('pre');
+                box.className = 'preview-text-box';
+                box.textContent = text;
+                previewBody.appendChild(box);
+            })
+            .catch(() => {
+                renderFallbackPreview(note);
+            });
+        previewModal.classList.add('active');
+        return;
     } else {
-        const message = document.createElement('div');
-        message.className = 'preview-text';
-        message.textContent = 'Preview not available for this file type.';
-        previewBody.appendChild(message);
+        renderFallbackPreview(note);
     }
 
     previewModal.classList.add('active');
 }
 
-function downloadFile(file) {
-    const a = document.createElement('a');
-    a.href = file.content;
-    a.download = file.name;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    showNotification(`Downloading ${file.name}`);
+function renderFallbackPreview(note) {
+    previewBody.innerHTML = `
+        <div class="fallback-preview-card">
+            <i class="${getFileIcon(note.type)}"></i>
+            <h4>${escapeHTML(note.title)}</h4>
+            <p style="color: var(--text-light); margin: 10px 0;">
+                Direct preview is not available in browser for this document format (${escapeHTML(note.type.toUpperCase())}).
+            </p>
+            <p>Click <strong>Download</strong> below to open and view the full file on your device.</p>
+        </div>
+    `;
 }
 
-async function deleteFile(fileId) {
-    if (!confirm('Are you sure you want to delete this file?')) return;
+// Download Handler (Increments Counter & Preserves Original Filename)
+async function downloadNoteFile(note) {
+    note.downloadCount = (note.downloadCount || 0) + 1;
+    renderNotesFeed();
+
+    const noteUrl = note.content || note.url;
+    const downloadName = note.name || note.title || 'student_note';
+
+    showNotification(`Downloading ${downloadName}...`);
 
     try {
-        const response = await fetch(`${API_BASE_URL}/files/${fileId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
+        // Fetch as blob to force download with original filename
+        const response = await fetch(noteUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
 
-        if (response.ok) {
-            files = files.filter(f => f.id !== fileId);
-            renderFiles();
-            showNotification('File deleted successfully');
-        } else {
-            showNotification('Failed to delete file', true);
-        }
-    } catch (error) {
-        console.error('Delete error:', error);
-        showNotification('Failed to delete file', true);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = downloadName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+        // Direct link fallback
+        const a = document.createElement('a');
+        a.href = noteUrl;
+        a.download = downloadName;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 }
 
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
+// Share Feature
+function shareNoteLink(note) {
+    const shareData = {
+        title: note.title,
+        text: `Check out these notes on ${note.subject} (${note.semester}): ${note.title}`,
+        url: window.location.href
+    };
+
+    if (navigator.share) {
+        navigator.share(shareData).catch(() => copyToClipboard(shareData.url));
+    } else {
+        copyToClipboard(shareData.url);
+    }
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showNotification('Notes platform link copied to clipboard!');
+    }).catch(() => {
+        showNotification('Share link ready!');
+    });
+}
+
+// Delete Note Modal Prompt
+function promptNoteDeletion(id) {
+    pendingDeleteId = id;
+    deleteConfirmModal.classList.add('active');
+}
+
+async function executeNoteDeletion() {
+    if (!pendingDeleteId) return;
+    deleteConfirmModal.classList.remove('active');
+
+    if (isFirebaseAvailable) {
+        try {
+            await firebase.firestore().collection('notes').doc(pendingDeleteId).delete();
+            showNotification('Note deleted successfully');
+        } catch (err) {
+            console.warn('Firebase delete note error:', err.message);
+        }
+    } else {
+        try {
+            await fetch(`${API_BASE_URL}/files/${pendingDeleteId}`, {
+                method: 'DELETE',
+                headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+            });
+            showNotification('Note deleted successfully');
+        } catch (err) {
+            console.warn('Local delete note error:', err.message);
+        }
+    }
+
+    notesFeed = notesFeed.filter(n => n.id !== pendingDeleteId);
+    pendingDeleteId = null;
+    renderNotesFeed();
+}
+
+// Helper Utilities
+function getFileIcon(type) {
+    switch (type) {
+        case 'pdf': return 'fas fa-file-pdf';
+        case 'doc': return 'fas fa-file-word';
+        case 'txt': return 'fas fa-file-alt';
+        case 'img': return 'fas fa-file-image';
+        case 'ppt': return 'fas fa-file-powerpoint';
+        case 'xls': return 'fas fa-file-excel';
+        case 'video': return 'fas fa-file-video';
+        default: return 'fas fa-file';
+    }
+}
+
+function getFileTypeCategory(mimetype = '', filename = '') {
+    const ext = (filename.substring(filename.lastIndexOf('.'))).toLowerCase();
+    if (mimetype.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) return 'img';
+    if (mimetype === 'application/pdf' || ext === '.pdf') return 'pdf';
+    if (mimetype === 'text/plain' || ext === '.txt') return 'txt';
+    if (['.doc', '.docx'].includes(ext) || mimetype.includes('word')) return 'doc';
+    if (['.ppt', '.pptx'].includes(ext) || mimetype.includes('presentation')) return 'ppt';
+    if (['.xls', '.xlsx'].includes(ext) || mimetype.includes('spreadsheet')) return 'xls';
+    if (mimetype.startsWith('video/')) return 'video';
+    return 'other';
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-function showNotification(message, isError = false) {
-    notificationText.textContent = message;
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function toggleTheme() {
+    document.body.classList.toggle('dark-mode');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    if (themeIcon) {
+        themeIcon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+}
+
+function loadThemePreference() {
+    const theme = localStorage.getItem('theme');
+    if (theme === 'dark') {
+        document.body.classList.add('dark-mode');
+        if (themeIcon) themeIcon.className = 'fas fa-sun';
+    }
+}
+
+function handleContactSubmit(e) {
+    e.preventDefault();
+    contactModal.classList.remove('active');
+    contactForm.reset();
+    showNotification('Thank you! Your support message has been submitted.');
+}
+
+function showNotification(msg, isError = false) {
+    if (!notification || !notificationText) return;
+    notificationText.textContent = msg;
     notification.classList.remove('error');
 
     if (isError) {
         notification.classList.add('error');
-        notification.querySelector('i').className = 'fas fa-exclamation-circle';
+        if (notificationIcon) notificationIcon.className = 'fas fa-exclamation-circle';
     } else {
-        notification.querySelector('i').className = 'fas fa-check-circle';
+        if (notificationIcon) notificationIcon.className = 'fas fa-check-circle';
     }
 
     notification.classList.add('show');
-
-    setTimeout(() => {
-        notification.classList.remove('show');
-    }, 3000);
+    setTimeout(() => notification.classList.remove('show'), 3500);
 }
 
-function updateConnectionStatus(status, message) {
+function updateConnectionStatus(status, msg) {
     if (!connectionStatus || !connectionText) return;
-
     connectionStatus.className = 'connection-status ' + status;
-    connectionText.textContent = message;
-
-    const icon = connectionStatus.querySelector('i');
-    if (icon) {
-        switch (status) {
-            case 'connected':
-                icon.className = 'fas fa-check-circle';
-                break;
-            case 'disconnected':
-                icon.className = 'fas fa-exclamation-triangle';
-                break;
-            case 'warning':
-                icon.className = 'fas fa-info-circle';
-                break;
-            default:
-                icon.className = 'fas fa-wifi';
-        }
-    }
-
-    if (status === 'connected') {
-        setTimeout(() => {
-            connectionStatus.style.opacity = '0';
-            setTimeout(() => {
-                connectionStatus.style.display = 'none';
-            }, 300);
-        }, 3000);
-    }
+    connectionText.textContent = msg;
 }
 
-async function testConnection() {
-    updateConnectionStatus('connecting', 'Connecting...');
-
-    try {
-        const serverUrl = API_BASE_URL.replace('/api', '');
-        const response = await fetch(serverUrl + '/health');
-
-        if (response.ok) {
-            console.log('✅ Server connected');
-            updateConnectionStatus('connected', 'Connected');
-        } else {
-            console.warn('⚠️ Server status:', response.status);
-            updateConnectionStatus('warning', 'Server issue');
-        }
-    } catch (error) {
-        console.error('❌ Connection failed:', error);
-        updateConnectionStatus('disconnected', 'Cannot connect');
-        showNotification('Cannot connect to server!', true);
-    }
-}
-
-// Initialize when DOM is ready
+// Bootstrap Application
 document.addEventListener('DOMContentLoaded', init);
