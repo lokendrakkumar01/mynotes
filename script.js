@@ -1363,11 +1363,15 @@ function resetAllFilters() {
 async function openNotePreview(note) {
     activePreviewNote = note;
     previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
-    previewBody.innerHTML = '<div style="text-align:center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 32px; color: var(--primary);"></i><p style="margin-top: 10px;">Loading note preview...</p></div>';
+    previewBody.innerHTML = '<div style="text-align:center; padding: 50px;"><i class="fas fa-spinner fa-spin" style="font-size: 36px; color: var(--primary);"></i><p style="margin-top: 14px; font-weight: 600;">Loading note document preview...</p></div>';
     previewModal.classList.add('active');
 
     const viewUrl = `${API_BASE_URL}/files/${note.id}/view`;
-    const directUrl = note.url || note.content || viewUrl;
+    let directUrl = note.url || note.content || viewUrl;
+
+    if (directUrl.includes('/image/upload/') && note.type === 'pdf') {
+        directUrl = directUrl.replace('/image/upload/', '/raw/upload/');
+    }
 
     if (note.type === 'img') {
         previewBody.innerHTML = '';
@@ -1376,16 +1380,22 @@ async function openNotePreview(note) {
         img.onerror = () => { img.src = directUrl; };
         img.alt = note.title;
         img.style.maxWidth = '100%';
-        img.style.maxHeight = '500px';
+        img.style.maxHeight = '520px';
         img.style.objectFit = 'contain';
         img.style.borderRadius = '8px';
+        img.style.display = 'block';
+        img.style.margin = '0 auto';
         previewBody.appendChild(img);
         return;
     }
 
     if (note.type === 'pdf') {
         try {
-            const res = await fetch(viewUrl);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const res = await fetch(viewUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
             if (res.ok) {
                 const blob = await res.blob();
                 if (blob.size > 0) {
@@ -1395,7 +1405,7 @@ async function openNotePreview(note) {
                     const iframe = document.createElement('iframe');
                     iframe.src = blobUrl;
                     iframe.style.width = '100%';
-                    iframe.style.height = '530px';
+                    iframe.style.height = '540px';
                     iframe.style.border = 'none';
                     iframe.style.borderRadius = '8px';
                     previewBody.appendChild(iframe);
@@ -1403,14 +1413,14 @@ async function openNotePreview(note) {
                 }
             }
         } catch (e) {
-            console.warn('PDF blob preview fetch failed, attempting iframe fallback:', e.message);
+            console.warn('PDF blob preview fetch error or timeout:', e.message);
         }
 
-        // Fallback PDF Viewer
+        // Fallback PDF Embed
         previewBody.innerHTML = '';
         const iframe = document.createElement('iframe');
         iframe.style.width = '100%';
-        iframe.style.height = '530px';
+        iframe.style.height = '540px';
         iframe.style.border = 'none';
         iframe.style.borderRadius = '8px';
 
@@ -1447,18 +1457,43 @@ async function openNotePreview(note) {
 
     if (['doc', 'ppt', 'xls'].includes(note.type)) {
         previewBody.innerHTML = '';
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '100%';
-        iframe.style.height = '530px';
-        iframe.style.border = 'none';
-        iframe.style.borderRadius = '8px';
+        
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '15px';
 
         if (directUrl.startsWith('http://') || directUrl.startsWith('https://')) {
+            const iframe = document.createElement('iframe');
             iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(directUrl)}&embedded=true`;
-        } else {
-            iframe.src = viewUrl;
+            iframe.style.width = '100%';
+            iframe.style.height = '440px';
+            iframe.style.border = 'none';
+            iframe.style.borderRadius = '8px';
+            container.appendChild(iframe);
         }
-        previewBody.appendChild(iframe);
+
+        const infoBar = document.createElement('div');
+        infoBar.className = 'glass-card';
+        infoBar.style.padding = '14px 20px';
+        infoBar.style.display = 'flex';
+        infoBar.style.justifyContent = 'space-between';
+        infoBar.style.alignItems = 'center';
+        infoBar.style.flexWrap = 'wrap';
+        infoBar.style.gap = '10px';
+        infoBar.innerHTML = `
+            <div>
+                <strong><i class="${getFileIcon(note.type)}"></i> ${escapeHTML(note.title)}</strong>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Format: ${escapeHTML(note.type.toUpperCase())} | Size: ${formatBytes(note.size)}</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="modalOfficeDownloadBtn">
+                <i class="fas fa-download"></i> Download ${escapeHTML(note.type.toUpperCase())} File
+            </button>
+        `;
+        infoBar.querySelector('#modalOfficeDownloadBtn').addEventListener('click', () => downloadNoteFile(note));
+        container.appendChild(infoBar);
+
+        previewBody.appendChild(container);
         return;
     }
 

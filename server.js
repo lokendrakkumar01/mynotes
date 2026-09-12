@@ -421,6 +421,40 @@ function getMimeTypeFromExt(filename = '') {
     }
 }
 
+// Helper to reliably fetch remote Cloudinary files with automatic URL fallback between /raw/upload/ and /image/upload/
+async function fetchRemoteBuffer(url) {
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) return null;
+
+    // Attempt 1: Fetch original URL directly
+    try {
+        const res1 = await fetch(url);
+        if (res1.ok) {
+            const ab = await res1.arrayBuffer();
+            return Buffer.from(ab);
+        }
+    } catch (e) {}
+
+    // Attempt 2: Auto-swap Cloudinary resource type prefix (/image/upload/ <-> /raw/upload/)
+    try {
+        let altUrl = url;
+        if (url.includes('/image/upload/')) {
+            altUrl = url.replace('/image/upload/', '/raw/upload/');
+        } else if (url.includes('/raw/upload/')) {
+            altUrl = url.replace('/raw/upload/', '/image/upload/');
+        }
+
+        if (altUrl !== url) {
+            const res2 = await fetch(altUrl);
+            if (res2.ok) {
+                const ab = await res2.arrayBuffer();
+                return Buffer.from(ab);
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 // File Download Endpoint (Prioritizes local disk file and fixes Cloudinary redirects/raw URLs)
 app.get('/api/files/:id/download', async (req, res) => {
     try {
@@ -444,29 +478,15 @@ app.get('/api/files/:id/download', async (req, res) => {
             }
         }
 
-        // 2. Fallback to Cloudinary / Remote Storage with URL rewrite for non-image assets
-        let fileUrl = file.url || '';
-        const ext = path.extname(originalName).toLowerCase();
-        if (['.pdf', '.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
-            fileUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
-        }
-
-        if (fileUrl && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
-            try {
-                const remoteRes = await fetch(fileUrl);
-                if (remoteRes.ok) {
-                    const arrayBuffer = await remoteRes.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-                    
-                    res.setHeader('Content-Type', contentType);
-                    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
-                    res.setHeader('Content-Length', buffer.length);
-                    return res.send(buffer);
-                }
-            } catch (fetchErr) {
-                console.warn('Remote download fetch error, redirecting:', fetchErr.message);
+        // 2. Fallback to Cloudinary / Remote Storage with automatic URL fallback
+        if (file.url) {
+            const buffer = await fetchRemoteBuffer(file.url);
+            if (buffer) {
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
+                res.setHeader('Content-Length', buffer.length);
+                return res.send(buffer);
             }
-            return res.redirect(fileUrl);
         }
 
         return res.status(404).json({ success: false, message: 'Note file not found on server or cloud storage' });
@@ -499,27 +519,15 @@ app.get('/api/files/:id/view', async (req, res) => {
             }
         }
 
-        // 2. Fallback to Cloudinary / Remote Storage with URL rewrite for non-image assets
-        let fileUrl = file.url || '';
-        const ext = path.extname(originalName).toLowerCase();
-        if (['.pdf', '.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
-            fileUrl = fileUrl.replace('/image/upload/', '/raw/upload/');
-        }
-
-        if (fileUrl && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
-            try {
-                const remoteRes = await fetch(fileUrl);
-                if (remoteRes.ok) {
-                    const arrayBuffer = await remoteRes.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-
-                    res.setHeader('Content-Type', contentType);
-                    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
-                    res.setHeader('Content-Length', buffer.length);
-                    return res.send(buffer);
-                }
-            } catch (err) {}
-            return res.redirect(fileUrl);
+        // 2. Fallback to Cloudinary / Remote Storage with automatic URL fallback
+        if (file.url) {
+            const buffer = await fetchRemoteBuffer(file.url);
+            if (buffer) {
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
+                res.setHeader('Content-Length', buffer.length);
+                return res.send(buffer);
+            }
         }
 
         return res.status(404).send('Note file missing on server storage');
