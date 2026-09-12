@@ -140,8 +140,10 @@ async function uploadToCloudinary(filePath, originalname) {
     try {
         const ext = path.extname(originalname).toLowerCase();
         let resourceType = 'auto';
-        if (['.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
+        if (['.pdf', '.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
             resourceType = 'raw';
+        } else if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+            resourceType = 'image';
         }
 
         const result = await cloudinary.uploader.upload(filePath, {
@@ -399,7 +401,7 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
     }
 });
 
-// File Download Endpoint
+// File Download Endpoint (Fixes PDF download corruptions by following HTTP redirects)
 app.get('/api/files/:id/download', async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
@@ -411,17 +413,25 @@ app.get('/api/files/:id/download', async (req, res) => {
         await db.incrementDownloadCount(req.params.id);
 
         const originalName = file.name || file.title || 'note_document';
+        const contentType = file.mimetype || 'application/octet-stream';
 
         if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
-            const client = file.url.startsWith('https://') ? https : http;
-            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
-            res.setHeader('Content-Type', file.mimetype || 'application/octet-stream');
-            
-            return client.get(file.url, (stream) => {
-                stream.pipe(res);
-            }).on('error', (err) => {
-                res.redirect(file.url);
-            });
+            try {
+                // Native fetch automatically follows 301, 302, 307, 308 redirects from Cloudinary/CDN
+                const remoteRes = await fetch(file.url);
+                if (remoteRes.ok) {
+                    const arrayBuffer = await remoteRes.arrayBuffer();
+                    const buffer = Buffer.from(arrayBuffer);
+                    
+                    res.setHeader('Content-Type', contentType);
+                    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
+                    res.setHeader('Content-Length', buffer.length);
+                    return res.send(buffer);
+                }
+            } catch (fetchErr) {
+                console.warn('Remote download fetch error, falling back to direct redirect:', fetchErr.message);
+            }
+            return res.redirect(file.url);
         }
 
         const filenameOnDisk = file.filename || path.basename(file.path || '');
@@ -435,6 +445,50 @@ app.get('/api/files/:id/download', async (req, res) => {
     } catch (error) {
         console.error('Download error:', error);
         res.status(500).json({ success: false, message: 'Error initiating file download' });
+    }
+});
+
+// File View / Inline Preview Endpoint
+app.get('/api/files/:id/view', async (req, res) => {
+    try {
+        const file = await db.getFileById(req.params.id);
+
+        if (!file) {
+            return res.status(404).send('Note file not found');
+        }
+
+        const originalName = file.name || file.title || 'note_document';
+        const contentType = file.mimetype || 'application/octet-stream';
+
+        if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
+            try {
+                const remoteRes = await fetch(file.url);
+                if (remoteRes.ok) {
+                    const arrayBuffer = await remoteRes.arrayBuffer();
+                    const buffer = Buffer.from(arrayBuffer);
+
+                    res.setHeader('Content-Type', contentType);
+                    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
+                    res.setHeader('Content-Length', buffer.length);
+                    return res.send(buffer);
+                }
+            } catch (err) {}
+            return res.redirect(file.url);
+        }
+
+        const filenameOnDisk = file.filename || path.basename(file.path || '');
+        const filePath = path.join(uploadsDir, filenameOnDisk);
+
+        if (fs.existsSync(filePath)) {
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
+            return res.sendFile(filePath);
+        }
+
+        res.status(404).send('Note file missing on server storage');
+    } catch (error) {
+        console.error('View file error:', error);
+        res.status(500).send('Error loading file preview');
     }
 });
 

@@ -1363,65 +1363,106 @@ function resetAllFilters() {
 async function openNotePreview(note) {
     activePreviewNote = note;
     previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
-    previewBody.innerHTML = '';
+    previewBody.innerHTML = '<div style="text-align:center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 32px; color: var(--primary);"></i><p style="margin-top: 10px;">Loading note preview...</p></div>';
+    previewModal.classList.add('active');
 
-    const noteUrl = note.url || note.content || `${API_BASE_URL}/files/${note.id}/download`;
-
-    if (!noteUrl) {
-        renderMissingStoragePreviewCard(note);
-        previewModal.classList.add('active');
-        return;
-    }
+    const viewUrl = `${API_BASE_URL}/files/${note.id}/view`;
+    const directUrl = note.url || note.content || viewUrl;
 
     if (note.type === 'img') {
+        previewBody.innerHTML = '';
         const img = document.createElement('img');
-        img.src = noteUrl;
+        img.src = viewUrl;
+        img.onerror = () => { img.src = directUrl; };
         img.alt = note.title;
         img.style.maxWidth = '100%';
         img.style.maxHeight = '500px';
         img.style.objectFit = 'contain';
         img.style.borderRadius = '8px';
         previewBody.appendChild(img);
-        previewModal.classList.add('active');
         return;
     }
 
-    if (note.type === 'pdf' || ['doc', 'ppt', 'xls'].includes(note.type)) {
+    if (note.type === 'pdf') {
+        try {
+            const res = await fetch(viewUrl);
+            if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 0) {
+                    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+                    const blobUrl = URL.createObjectURL(pdfBlob);
+                    previewBody.innerHTML = '';
+                    const iframe = document.createElement('iframe');
+                    iframe.src = blobUrl;
+                    iframe.style.width = '100%';
+                    iframe.style.height = '530px';
+                    iframe.style.border = 'none';
+                    iframe.style.borderRadius = '8px';
+                    previewBody.appendChild(iframe);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('PDF blob preview fetch failed, attempting iframe fallback:', e.message);
+        }
+
+        // Fallback PDF Viewer
+        previewBody.innerHTML = '';
         const iframe = document.createElement('iframe');
         iframe.style.width = '100%';
-        iframe.style.height = '520px';
+        iframe.style.height = '530px';
         iframe.style.border = 'none';
         iframe.style.borderRadius = '8px';
 
-        // Google Docs Viewer embeds remote Cloudinary PDFs & Office docs cleanly without browser CORS / PDF extension errors
-        if (noteUrl.startsWith('http://') || noteUrl.startsWith('https://')) {
-            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(noteUrl)}&embedded=true`;
+        if (directUrl.startsWith('http://') || directUrl.startsWith('https://')) {
+            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(directUrl)}&embedded=true`;
         } else {
-            iframe.src = noteUrl;
+            iframe.src = viewUrl;
         }
-
         previewBody.appendChild(iframe);
-        previewModal.classList.add('active');
         return;
     }
 
     if (note.type === 'txt') {
         try {
-            const testRes = await fetch(noteUrl);
-            if (testRes.ok) {
-                const text = await testRes.text();
+            const res = await fetch(viewUrl);
+            if (res.ok) {
+                const text = await res.text();
+                previewBody.innerHTML = '';
                 const box = document.createElement('pre');
                 box.className = 'preview-text-box';
+                box.style.maxHeight = '500px';
+                box.style.overflowY = 'auto';
+                box.style.padding = '16px';
+                box.style.background = 'rgba(0,0,0,0.03)';
+                box.style.borderRadius = '8px';
+                box.style.whiteSpace = 'pre-wrap';
+                box.style.wordBreak = 'break-word';
                 box.textContent = text;
                 previewBody.appendChild(box);
-                previewModal.classList.add('active');
                 return;
             }
         } catch (e) {}
     }
 
+    if (['doc', 'ppt', 'xls'].includes(note.type)) {
+        previewBody.innerHTML = '';
+        const iframe = document.createElement('iframe');
+        iframe.style.width = '100%';
+        iframe.style.height = '530px';
+        iframe.style.border = 'none';
+        iframe.style.borderRadius = '8px';
+
+        if (directUrl.startsWith('http://') || directUrl.startsWith('https://')) {
+            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(directUrl)}&embedded=true`;
+        } else {
+            iframe.src = viewUrl;
+        }
+        previewBody.appendChild(iframe);
+        return;
+    }
+
     renderFallbackPreview(note);
-    previewModal.classList.add('active');
 }
 
 function renderMissingStoragePreviewCard(note) {
@@ -1447,7 +1488,7 @@ function renderFallbackPreview(note) {
             <p>
                 Direct browser preview is not available for document format <strong>${escapeHTML(note.type.toUpperCase())}</strong>.
             </p>
-            <p>Click <strong>Download</strong> below to open and view the file on your device.</p>
+            <p>Click <strong>Download Note</strong> below to open and view the file on your device.</p>
         </div>
     `;
 }
@@ -1477,10 +1518,11 @@ async function downloadNoteFile(note) {
             a.click();
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+            showNotification(`✅ Downloaded ${downloadName}`);
             return;
         }
     } catch (err) {
-        console.warn('Backend download error, trying direct URL:', err.message);
+        console.warn('Backend download error, falling back to direct link:', err.message);
     }
 
     const directUrl = note.url || note.content;
