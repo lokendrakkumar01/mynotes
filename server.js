@@ -2,10 +2,13 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const os = require('os');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
 const { db } = require('./db');
@@ -14,7 +17,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'mynotes-secret-key-student-sharing';
 
-// Ensure uploads folder exists
+// Configure Cloudinary API
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'kt2upmou',
+    api_key: process.env.CLOUDINARY_API_KEY || '972468326573411',
+    api_secret: process.env.CLOUDINARY_API_SECRET || 'XMNZ8Ft0fkuQ06tgvv9b8zR33fs'
+});
+
+// Ensure local uploads folder exists
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -39,8 +49,8 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files (HTML, CSS, JS, uploaded assets)
 app.use(express.static(__dirname));
@@ -59,26 +69,9 @@ const storage = multer.diskStorage({
     }
 });
 
-// File Filter for Supported Educational Formats
-const fileFilter = (req, file, cb) => {
-    const allowedExtensions = [
-        '.pdf', '.doc', '.docx', '.txt',
-        '.ppt', '.pptx', '.xls', '.xlsx',
-        '.jpg', '.jpeg', '.png', '.webp'
-    ];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowedExtensions.includes(ext) || file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
-        cb(null, true);
-    } else {
-        // Accept file with warning rather than throwing an unhandled server error
-        cb(null, true);
-    }
-};
-
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB Max File Size
-    fileFilter: fileFilter
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB Max File Size
 });
 
 // Helper for JWT Token Verification
@@ -87,7 +80,6 @@ function authenticateToken(req, res, next) {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        // Allow anonymous guest access for reading shared notes
         req.user = null;
         return next();
     }
@@ -110,6 +102,42 @@ function requireAuth(req, res, next) {
     next();
 }
 
+// Helper to Upload File to Cloudinary
+async function uploadToCloudinary(filePath, originalname) {
+    try {
+        const ext = path.extname(originalname).toLowerCase();
+        let resourceType = 'auto';
+        if (['.doc', '.docx', '.txt', '.ppt', '.pptx', '.xls', '.xlsx'].includes(ext)) {
+            resourceType = 'raw';
+        }
+
+        const result = await cloudinary.uploader.upload(filePath, {
+            folder: 'mynotes_uploads',
+            resource_type: resourceType,
+            use_filename: true,
+            unique_filename: true
+        });
+
+        return result;
+    } catch (err) {
+        console.warn('⚠️ Cloudinary upload warning:', err.message);
+        return null;
+    }
+}
+
+// Helper function to map mimetypes / extensions to file types
+function getFileType(mimetype, originalname = '') {
+    const ext = path.extname(originalname).toLowerCase();
+    if (mimetype.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) return 'img';
+    if (mimetype === 'application/pdf' || ext === '.pdf') return 'pdf';
+    if (mimetype === 'text/plain' || ext === '.txt') return 'txt';
+    if (['.doc', '.docx'].includes(ext) || mimetype.includes('word')) return 'doc';
+    if (['.ppt', '.pptx'].includes(ext) || mimetype.includes('presentation')) return 'ppt';
+    if (['.xls', '.xlsx'].includes(ext) || mimetype.includes('spreadsheet') || mimetype.includes('excel')) return 'xls';
+    if (mimetype.startsWith('video/')) return 'video';
+    return 'other';
+}
+
 // ==========================================
 // ROUTES
 // ==========================================
@@ -124,7 +152,7 @@ app.get('/health', async (req, res) => {
     const dbStatus = await db.testConnection();
     res.json({
         status: 'ok',
-        message: 'MyNotes Server is running',
+        message: 'MyNotes Server is running with MongoDB & Cloudinary',
         database: dbStatus ? 'connected' : 'local_json',
         ip: getServerIP(),
         port: PORT
@@ -227,7 +255,7 @@ app.get('/api/files', authenticateToken, async (req, res) => {
     }
 });
 
-// Upload Notes with Full Academic Metadata
+// Upload Notes with Cloudinary Storage & MongoDB Record Creation
 app.post('/api/files/upload', authenticateToken, upload.array('files', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
@@ -247,11 +275,17 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
         const uploadedFiles = [];
         for (const file of req.files) {
             const fileType = getFileType(file.mimetype, file.originalname);
+            
+            // Upload to Cloudinary for permanent hosting on Render
+            const cloudRes = await uploadToCloudinary(file.path, file.originalname);
+            
             const fileData = {
                 id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
                 title: title || file.originalname,
                 name: file.originalname,
                 filename: file.filename,
+                url: cloudRes ? cloudRes.secure_url : `/uploads/${file.filename}`,
+                cloudinaryId: cloudRes ? cloudRes.public_id : null,
                 type: fileType,
                 size: file.size,
                 mimetype: file.mimetype,
@@ -280,7 +314,7 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
     }
 });
 
-// File Download Endpoint (Tracks Download Counter & Forces Original Filename)
+// File Download Endpoint (Tracks Download Counter & Handles Local or Cloudinary Files)
 app.get('/api/files/:id/download', async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
@@ -289,6 +323,26 @@ app.get('/api/files/:id/download', async (req, res) => {
             return res.status(404).json({ message: 'Note file not found' });
         }
 
+        // Increment download counter
+        await db.incrementDownloadCount(req.params.id);
+
+        const originalName = file.name || file.title || 'note_document';
+
+        // Stream from Cloudinary if hosted remotely
+        if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
+            const client = file.url.startsWith('https://') ? https : http;
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
+            res.setHeader('Content-Type', file.mimetype || 'application/octet-stream');
+            
+            return client.get(file.url, (stream) => {
+                stream.pipe(res);
+            }).on('error', (err) => {
+                console.error('Cloudinary download stream error:', err);
+                res.redirect(file.url);
+            });
+        }
+
+        // Local storage fallback
         const filenameOnDisk = file.filename || path.basename(file.path || '');
         const filePath = path.join(uploadsDir, filenameOnDisk);
 
@@ -296,10 +350,6 @@ app.get('/api/files/:id/download', async (req, res) => {
             return res.status(404).json({ message: 'Note file not found on server storage' });
         }
 
-        // Increment download counter
-        await db.incrementDownloadCount(req.params.id);
-
-        const originalName = file.name || file.title || 'note_document';
         res.download(filePath, originalName);
     } catch (error) {
         console.error('Download error:', error);
@@ -324,6 +374,17 @@ app.delete('/api/files/:id', authenticateToken, requireAuth, async (req, res) =>
         const deletedFile = await db.deleteFile(req.params.id, req.user.id);
 
         if (deletedFile) {
+            // Delete from Cloudinary if present
+            if (deletedFile.cloudinaryId) {
+                try {
+                    await cloudinary.uploader.destroy(deletedFile.cloudinaryId, { resource_type: 'raw' });
+                    await cloudinary.uploader.destroy(deletedFile.cloudinaryId, { resource_type: 'image' });
+                } catch (cErr) {
+                    console.warn('Cloudinary delete warning:', cErr.message);
+                }
+            }
+
+            // Delete local file if present
             const filenameOnDisk = deletedFile.filename || path.basename(deletedFile.path || '');
             const filePath = path.join(uploadsDir, filenameOnDisk);
             if (fs.existsSync(filePath)) {
@@ -337,19 +398,6 @@ app.delete('/api/files/:id', authenticateToken, requireAuth, async (req, res) =>
         res.status(500).json({ message: 'Error deleting note' });
     }
 });
-
-// Helper function to map mimetypes / extensions to file types
-function getFileType(mimetype, originalname = '') {
-    const ext = path.extname(originalname).toLowerCase();
-    if (mimetype.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) return 'img';
-    if (mimetype === 'application/pdf' || ext === '.pdf') return 'pdf';
-    if (mimetype === 'text/plain' || ext === '.txt') return 'txt';
-    if (['.doc', '.docx'].includes(ext) || mimetype.includes('word')) return 'doc';
-    if (['.ppt', '.pptx'].includes(ext) || mimetype.includes('presentation')) return 'ppt';
-    if (['.xls', '.xlsx'].includes(ext) || mimetype.includes('spreadsheet') || mimetype.includes('excel')) return 'xls';
-    if (mimetype.startsWith('video/')) return 'video';
-    return 'other';
-}
 
 // Server Initialization
 async function startServer() {
