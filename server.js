@@ -487,6 +487,8 @@ app.get('/api/files/:id/download', async (req, res) => {
                 res.setHeader('Content-Length', buffer.length);
                 return res.send(buffer);
             }
+            // 3. Direct Redirect to Cloudinary URL if buffer fetch failed
+            return res.redirect(file.url);
         }
 
         return res.status(404).json({ success: false, message: 'Note file not found on server or cloud storage' });
@@ -528,6 +530,8 @@ app.get('/api/files/:id/view', async (req, res) => {
                 res.setHeader('Content-Length', buffer.length);
                 return res.send(buffer);
             }
+            // 3. Direct Redirect to Cloudinary URL if buffer fetch failed
+            return res.redirect(file.url);
         }
 
         return res.status(404).send('Note file missing on server storage');

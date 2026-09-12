@@ -1382,10 +1382,9 @@ function resetAllFilters() {
 // Universal File Previews
 async function openNotePreview(note) {
     activePreviewNote = note;
-    previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
-    previewBody.innerHTML = '<div style="text-align:center; padding: 50px;"><i class="fas fa-spinner fa-spin" style="font-size: 36px; color: var(--primary);"></i><p style="margin-top: 14px; font-weight: 600;">Loading note document preview...</p></div>';
-    previewModal.classList.add('active');
-
+    previewTitle.innerHTML = `<i class="${getFileIcon(note.type)}"></i> Preview: ${escapeHTML(note.title)}`;
+    
+    // Top Action Bar inside preview modal
     const viewUrl = `${API_BASE_URL}/files/${note.id}/view`;
     let directUrl = note.url || note.content || viewUrl;
 
@@ -1393,8 +1392,36 @@ async function openNotePreview(note) {
         directUrl = directUrl.replace('/image/upload/', '/raw/upload/');
     }
 
+    const actionHeader = `
+        <div class="preview-action-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; margin-bottom: 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div style="font-size: 13px; color: var(--text-secondary);">
+                <strong>Format:</strong> ${escapeHTML(note.type ? note.type.toUpperCase() : 'DOC')} | <strong>Size:</strong> ${formatBytes(note.size)}
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <a href="${viewUrl}" target="_blank" class="btn btn-outline btn-sm">
+                    <i class="fas fa-external-link-alt"></i> Open Fullscreen
+                </a>
+                <button type="button" class="btn btn-primary btn-sm" id="modalHeaderDownloadBtn">
+                    <i class="fas fa-download"></i> Download Note
+                </button>
+            </div>
+        </div>
+        <div id="previewContainer"></div>
+    `;
+
+    previewBody.innerHTML = actionHeader;
+    const modalHeaderDownloadBtn = previewBody.querySelector('#modalHeaderDownloadBtn');
+    if (modalHeaderDownloadBtn) {
+        modalHeaderDownloadBtn.addEventListener('click', () => downloadNoteFile(note));
+    }
+
+    const previewContainer = previewBody.querySelector('#previewContainer');
+    previewContainer.innerHTML = '<div style="text-align:center; padding: 50px;"><i class="fas fa-spinner fa-spin" style="font-size: 36px; color: var(--primary);"></i><p style="margin-top: 14px; font-weight: 600;">Loading note document preview...</p></div>';
+    previewModal.classList.add('active');
+
+    // 1. Image Preview
     if (note.type === 'img') {
-        previewBody.innerHTML = '';
+        previewContainer.innerHTML = '';
         const img = document.createElement('img');
         img.src = viewUrl;
         img.onerror = () => { img.src = directUrl; };
@@ -1405,11 +1432,13 @@ async function openNotePreview(note) {
         img.style.borderRadius = '8px';
         img.style.display = 'block';
         img.style.margin = '0 auto';
-        previewBody.appendChild(img);
+        previewContainer.appendChild(img);
         return;
     }
 
+    // 2. PDF Document Preview
     if (note.type === 'pdf') {
+        // Try fetching PDF blob for native blob URL rendering
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -1418,17 +1447,20 @@ async function openNotePreview(note) {
 
             if (res.ok) {
                 const blob = await res.blob();
-                if (blob.size > 0) {
+                if (blob.size > 0 && (blob.type.includes('pdf') || blob.type.includes('octet-stream'))) {
                     const pdfBlob = new Blob([blob], { type: 'application/pdf' });
                     const blobUrl = URL.createObjectURL(pdfBlob);
-                    previewBody.innerHTML = '';
-                    const iframe = document.createElement('iframe');
-                    iframe.src = blobUrl;
-                    iframe.style.width = '100%';
-                    iframe.style.height = '540px';
-                    iframe.style.border = 'none';
-                    iframe.style.borderRadius = '8px';
-                    previewBody.appendChild(iframe);
+                    previewContainer.innerHTML = '';
+
+                    const objectTag = document.createElement('object');
+                    objectTag.data = blobUrl;
+                    objectTag.type = 'application/pdf';
+                    objectTag.style.width = '100%';
+                    objectTag.style.height = '540px';
+                    objectTag.style.borderRadius = '8px';
+                    objectTag.innerHTML = `<iframe src="${blobUrl}" style="width:100%; height:540px; border:none; border-radius:8px;"></iframe>`;
+                    
+                    previewContainer.appendChild(objectTag);
                     return;
                 }
             }
@@ -1436,29 +1468,26 @@ async function openNotePreview(note) {
             console.warn('PDF blob preview fetch error or timeout:', e.message);
         }
 
-        // Fallback PDF Embed
-        previewBody.innerHTML = '';
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '100%';
-        iframe.style.height = '540px';
-        iframe.style.border = 'none';
-        iframe.style.borderRadius = '8px';
-
-        if (directUrl.startsWith('http://') || directUrl.startsWith('https://')) {
-            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(directUrl)}&embedded=true`;
-        } else {
-            iframe.src = viewUrl;
-        }
-        previewBody.appendChild(iframe);
+        // Direct Native Backend Stream Embed Fallback
+        previewContainer.innerHTML = '';
+        const objectTag = document.createElement('object');
+        objectTag.data = viewUrl;
+        objectTag.type = 'application/pdf';
+        objectTag.style.width = '100%';
+        objectTag.style.height = '540px';
+        objectTag.style.borderRadius = '8px';
+        objectTag.innerHTML = `<iframe src="${viewUrl}" style="width:100%; height:540px; border:none; border-radius:8px;"></iframe>`;
+        previewContainer.appendChild(objectTag);
         return;
     }
 
+    // 3. Text Notes Preview
     if (note.type === 'txt') {
         try {
             const res = await fetch(viewUrl);
             if (res.ok) {
                 const text = await res.text();
-                previewBody.innerHTML = '';
+                previewContainer.innerHTML = '';
                 const box = document.createElement('pre');
                 box.className = 'preview-text-box';
                 box.style.maxHeight = '500px';
@@ -1469,51 +1498,59 @@ async function openNotePreview(note) {
                 box.style.whiteSpace = 'pre-wrap';
                 box.style.wordBreak = 'break-word';
                 box.textContent = text;
-                previewBody.appendChild(box);
+                previewContainer.appendChild(box);
                 return;
             }
         } catch (e) {}
     }
 
+    // 4. Word / PowerPoint / Excel / Office Documents
     if (['doc', 'ppt', 'xls'].includes(note.type)) {
-        previewBody.innerHTML = '';
+        previewContainer.innerHTML = '';
         
-        const container = document.createElement('div');
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
-        container.style.gap = '15px';
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.gap = '14px';
 
-        if (directUrl.startsWith('http://') || directUrl.startsWith('https://')) {
-            const iframe = document.createElement('iframe');
-            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(directUrl)}&embedded=true`;
-            iframe.style.width = '100%';
-            iframe.style.height = '440px';
-            iframe.style.border = 'none';
-            iframe.style.borderRadius = '8px';
-            container.appendChild(iframe);
-        }
+        const embedUrl = (directUrl.startsWith('http://') || directUrl.startsWith('https://')) ? directUrl : (window.location.origin + viewUrl);
+        const docsViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(embedUrl)}&embedded=true`;
 
-        const infoBar = document.createElement('div');
-        infoBar.className = 'glass-card';
-        infoBar.style.padding = '14px 20px';
-        infoBar.style.display = 'flex';
-        infoBar.style.justifyContent = 'space-between';
-        infoBar.style.alignItems = 'center';
-        infoBar.style.flexWrap = 'wrap';
-        infoBar.style.gap = '10px';
-        infoBar.innerHTML = `
-            <div>
-                <strong><i class="${getFileIcon(note.type)}"></i> ${escapeHTML(note.title)}</strong>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Format: ${escapeHTML(note.type.toUpperCase())} | Size: ${formatBytes(note.size)}</div>
+        const iframe = document.createElement('iframe');
+        iframe.src = docsViewerUrl;
+        iframe.style.width = '100%';
+        iframe.style.height = '440px';
+        iframe.style.border = 'none';
+        iframe.style.borderRadius = '8px';
+        wrapper.appendChild(iframe);
+
+        // Fallback helper info card in case viewer has "No preview available"
+        const noticeBox = document.createElement('div');
+        noticeBox.className = 'glass-card';
+        noticeBox.style.padding = '12px 18px';
+        noticeBox.style.display = 'flex';
+        noticeBox.style.justifyContent = 'space-between';
+        noticeBox.style.alignItems = 'center';
+        noticeBox.style.flexWrap = 'wrap';
+        noticeBox.style.gap = '10px';
+        noticeBox.innerHTML = `
+            <div style="font-size: 13px;">
+                <i class="fas fa-info-circle" style="color: var(--primary);"></i> 
+                If document preview displays <em>"No preview available"</em> above, open or download directly:
             </div>
-            <button type="button" class="btn btn-primary btn-sm" id="modalOfficeDownloadBtn">
-                <i class="fas fa-download"></i> Download ${escapeHTML(note.type.toUpperCase())} File
-            </button>
+            <div style="display: flex; gap: 8px;">
+                <a href="${viewUrl}" target="_blank" class="btn btn-outline btn-sm">
+                    <i class="fas fa-external-link-alt"></i> Open Document Window
+                </a>
+                <button type="button" class="btn btn-primary btn-sm" id="modalDocDownloadBtn">
+                    <i class="fas fa-download"></i> Download ${escapeHTML(note.type.toUpperCase())}
+                </button>
+            </div>
         `;
-        infoBar.querySelector('#modalOfficeDownloadBtn').addEventListener('click', () => downloadNoteFile(note));
-        container.appendChild(infoBar);
+        noticeBox.querySelector('#modalDocDownloadBtn').addEventListener('click', () => downloadNoteFile(note));
+        wrapper.appendChild(noticeBox);
 
-        previewBody.appendChild(container);
+        previewContainer.appendChild(wrapper);
         return;
     }
 
