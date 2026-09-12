@@ -290,10 +290,16 @@ async function verifyUserSession() {
 
 function updateRoleUI() {
     if (currentUser && currentUser.role === 'admin') {
-        if (tabAdminPortal) tabAdminPortal.style.display = 'inline-flex';
+        if (tabAdminPortal) {
+            tabAdminPortal.style.display = 'inline-flex';
+            tabAdminPortal.innerHTML = '<i class="fas fa-user-shield"></i> Admin Dashboard';
+        }
         if (createArticleBtn) createArticleBtn.style.display = 'inline-flex';
     } else {
-        if (tabAdminPortal) tabAdminPortal.style.display = 'none';
+        if (tabAdminPortal) {
+            tabAdminPortal.style.display = 'inline-flex';
+            tabAdminPortal.innerHTML = '<i class="fas fa-user-shield"></i> Admin Portal';
+        }
         if (createArticleBtn) createArticleBtn.style.display = 'none';
     }
 }
@@ -319,6 +325,15 @@ function setupEventListeners() {
     registerForm.addEventListener('submit', handleRegister);
     registerLink.addEventListener('click', (e) => { e.preventDefault(); showRegisterForm(); });
     loginLink.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+    
+    const adminLoginModalBtn = document.getElementById('adminLoginModalBtn');
+    if (adminLoginModalBtn) {
+        adminLoginModalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showAppView();
+            switchNavTab('admin-login');
+        });
+    }
     if (guestBtn) guestBtn.addEventListener('click', handleGuestAccess);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
     if (appLogoBtn) appLogoBtn.addEventListener('click', (e) => { e.preventDefault(); switchNavTab('feed'); });
