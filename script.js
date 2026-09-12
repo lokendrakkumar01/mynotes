@@ -297,8 +297,7 @@ function updateRoleUI() {
         if (createArticleBtn) createArticleBtn.style.display = 'inline-flex';
     } else {
         if (tabAdminPortal) {
-            tabAdminPortal.style.display = 'inline-flex';
-            tabAdminPortal.innerHTML = '<i class="fas fa-user-shield"></i> Admin Portal';
+            tabAdminPortal.style.display = 'none';
         }
         if (createArticleBtn) createArticleBtn.style.display = 'none';
     }
@@ -326,14 +325,16 @@ function setupEventListeners() {
     registerLink.addEventListener('click', (e) => { e.preventDefault(); showRegisterForm(); });
     loginLink.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
     
-    const adminLoginModalBtn = document.getElementById('adminLoginModalBtn');
-    if (adminLoginModalBtn) {
-        adminLoginModalBtn.addEventListener('click', (e) => {
+    // Secret shortcut for Admin Portal Access: Ctrl + Shift + A
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
             e.preventDefault();
             showAppView();
             switchNavTab('admin-login');
-        });
-    }
+            showNotification('Admin Portal Login View Activated', false);
+        }
+    });
+
     if (guestBtn) guestBtn.addEventListener('click', handleGuestAccess);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
     if (appLogoBtn) appLogoBtn.addEventListener('click', (e) => { e.preventDefault(); switchNavTab('feed'); });
@@ -2075,6 +2076,17 @@ function updateConnectionStatus(status, msg) {
     if (!connectionStatus || !connectionText) return;
     connectionStatus.className = 'connection-status ' + status;
     connectionText.textContent = msg;
+    if (status === 'connected') {
+        setTimeout(() => {
+            if (connectionStatus.classList.contains('connected')) {
+                connectionStatus.style.opacity = '0';
+                connectionStatus.style.pointerEvents = 'none';
+            }
+        }, 3000);
+    } else {
+        connectionStatus.style.opacity = '1';
+        connectionStatus.style.pointerEvents = 'auto';
+    }
 }
 
 // Bootstrap Application
