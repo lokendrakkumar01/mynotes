@@ -837,9 +837,10 @@ async function processFileUploads() {
         xhr.addEventListener('load', () => {
             progressContainer.style.display = 'none';
             if (xhr.status === 201 || xhr.status === 200) {
+                const uploadedCount = pendingFiles.length || 1;
                 clearPendingSelection();
                 resetUploadForm();
-                showNotification(`✅ ${pendingFiles.length} note file(s) uploaded successfully!`);
+                showNotification(`✅ ${uploadedCount} note file(s) uploaded successfully!`);
                 switchNavTab('feed');
                 loadSharedNotesFeed();
             } else {
@@ -939,6 +940,7 @@ async function loadSharedNotesFeed() {
             }));
             updateConnectionStatus('connected', 'Cloud Database Active (MongoDB Atlas & Cloudinary)');
             renderNotesFeed();
+            checkSharedNoteQueryParam();
             return;
         }
     } catch (err) {
@@ -965,6 +967,7 @@ async function loadSharedNotesFeed() {
             });
             updateConnectionStatus('connected', 'Cloud Storage Connected (Firebase)');
             renderNotesFeed();
+            checkSharedNoteQueryParam();
             return;
         } catch (err) {
             console.warn('Firebase feed fetch error:', err.message);
@@ -973,6 +976,7 @@ async function loadSharedNotesFeed() {
 
     updateConnectionStatus('connected', 'Local Notes Storage Ready');
     renderNotesFeed();
+    checkSharedNoteQueryParam();
 }
 
 // Render Main Feed with Multi-Criteria Filters & Sorting
@@ -1515,22 +1519,35 @@ async function handleReportSubmit(e) {
 
 // Share Feature
 function shareNoteLink(note) {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?note=${encodeURIComponent(note.id)}`;
     const shareData = {
         title: note.title,
-        text: `Check out these notes on ${note.subject} (${note.branch || note.classLevel || 'General'}): ${note.title}`,
-        url: window.location.href
+        text: `Check out "${note.title}" on ${note.subject} (${note.branch || note.classLevel || 'General'}) - MyNotes:`,
+        url: shareUrl
     };
 
     if (navigator.share) {
-        navigator.share(shareData).catch(() => copyToClipboard(shareData.url));
+        navigator.share(shareData).catch(() => copyToClipboard(shareUrl));
     } else {
-        copyToClipboard(shareData.url);
+        copyToClipboard(shareUrl);
+    }
+}
+
+function checkSharedNoteQueryParam() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedNoteId = urlParams.get('note');
+    if (sharedNoteId && notesFeed.length > 0) {
+        const found = notesFeed.find(n => n.id === sharedNoteId || n._id === sharedNoteId);
+        if (found) {
+            openNotePreview(found);
+            showNotification(`Opened shared note: ${found.title}`);
+        }
     }
 }
 
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
-        showNotification('Notes platform link copied to clipboard!');
+        showNotification('Direct note link copied to clipboard!');
     }).catch(() => {
         showNotification('Share link ready!');
     });
