@@ -1130,9 +1130,12 @@ function createNoteCardElement(note) {
             <button type="button" class="btn btn-primary download-btn">
                 <i class="fas fa-download"></i> Download
             </button>
-            ${(currentUser && (currentUser.role === 'admin' || currentUser.id === note.uploaderId)) ? `
+            ${(currentUser && currentUser.role === 'admin') ? `
             <button type="button" class="btn btn-outline edit-note-btn" title="Edit Note Details">
                 <i class="fas fa-edit"></i>
+            </button>
+            <button type="button" class="btn btn-danger-outline delete-btn" title="Delete note">
+                <i class="fas fa-trash"></i>
             </button>` : ''}
             <button type="button" class="btn btn-outline bookmark-btn ${isBookmarked ? 'active' : ''}" title="Save Note">
                 <i class="fas fa-bookmark"></i>
@@ -1143,9 +1146,6 @@ function createNoteCardElement(note) {
             <button type="button" class="btn btn-outline report-btn" title="Report Note" style="color: var(--warning);">
                 <i class="fas fa-flag"></i>
             </button>
-            <button type="button" class="btn btn-danger-outline delete-btn" title="Delete note">
-                <i class="fas fa-trash"></i>
-            </button>
         </div>
     `;
 
@@ -1155,10 +1155,12 @@ function createNoteCardElement(note) {
     const editBtn = card.querySelector('.edit-note-btn');
     if (editBtn) editBtn.addEventListener('click', () => openEditNoteModal(note));
 
+    const deleteBtn = card.querySelector('.delete-btn');
+    if (deleteBtn) deleteBtn.addEventListener('click', () => promptNoteDeletion(note.id));
+
     card.querySelector('.bookmark-btn').addEventListener('click', () => toggleBookmarkNote(note));
     card.querySelector('.share-btn').addEventListener('click', () => shareNoteLink(note));
     card.querySelector('.report-btn').addEventListener('click', () => openReportModal(note));
-    card.querySelector('.delete-btn').addEventListener('click', () => promptNoteDeletion(note.id));
 
     return card;
 }
