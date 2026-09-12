@@ -4,24 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyNotes — Student Notes Upload & Download Platform</title>
+    <title>MyNotes — Universal Academic Notes Platform (Class 1-12 & Engineering)</title>
     
     <!-- SEO & Social Meta Tags -->
-    <meta name="description" content="MyNotes is a student-friendly platform for uploading, sharing, previewing and downloading academic notes and study materials.">
-    <meta name="keywords" content="notes, student notes, study material, university notes, exam preparation, download notes, share notes">
-    <meta property="og:title" content="MyNotes — Student Notes Sharing Platform">
-    <meta property="og:description" content="Upload, preview, share and download academic notes and study materials with classmates easily.">
+    <meta name="description" content="MyNotes is a universal student platform for uploading, sharing, previewing and downloading notes for Class 1 to 12, Diploma, and 35+ Engineering Branches.">
+    <meta name="keywords" content="notes, student notes, class 1 to 12 notes, engineering notes, cse notes, polytechnic notes, study material, university notes, exam preparation, download notes, share notes">
+    <meta property="og:title" content="MyNotes — Universal Student Notes Sharing Platform">
+    <meta property="og:description" content="Upload, preview, share and download academic notes for Class 1-12, Diploma, and 35+ Engineering branches.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://lokendrakkumar01.github.io/mynotes/">
+    <meta property="og:url" content="https://mynotes-5jj4.onrender.com/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="MyNotes — Student Notes Sharing Platform">
-    <meta name="twitter:description" content="Upload, preview, share and download academic notes and study materials with classmates easily.">
+    <meta name="twitter:title" content="MyNotes — Universal Student Notes Sharing Platform">
+    <meta name="twitter:description" content="Upload, preview, share and download academic notes for Class 1-12, Diploma, and 35+ Engineering branches.">
     
-    <!-- FontAwesome Icons & Google Fonts -->
+    <!-- FontAwesome Icons & Custom Styling -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     
-    <!-- Firebase Compat SDKs for Cloud Shared Storage (GitHub Pages & Live Web Support) -->
+    <!-- Firebase Compat SDKs (Fallback Cloud Storage Support) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -34,7 +34,7 @@
         <div class="loader-spinner-wrapper">
             <div class="loader-spinner"></div>
         </div>
-        <p>Loading MyNotes Platform...</p>
+        <p>Loading MyNotes Universal Platform...</p>
     </div>
 
     <!-- Live Connection / Network Indicator -->
@@ -49,13 +49,8 @@
             <div class="brand-header">
                 <i class="fas fa-graduation-cap brand-logo-icon"></i>
                 <h2>MyNotes Platform</h2>
-                <p class="brand-subtitle">Student Notes Upload & Sharing Portal</p>
+                <p class="brand-subtitle">Universal Academic Notes Portal (Class 1-12 & Engineering)</p>
             </div>
-
-            <!-- Optional Google Login -->
-            <button id="googleLoginBtn" class="btn btn-primary btn-block" style="display: none; margin-bottom: 16px;">
-                <i class="fab fa-google"></i> Continue with Google
-            </button>
 
             <form id="loginForm">
                 <div class="form-group">
@@ -87,7 +82,7 @@
             <div class="brand-header">
                 <i class="fas fa-user-plus brand-logo-icon"></i>
                 <h2>Join MyNotes</h2>
-                <p class="brand-subtitle">Share study materials with your college friends</p>
+                <p class="brand-subtitle">Share study materials with students worldwide</p>
             </div>
 
             <div class="profile-upload">
@@ -134,14 +129,15 @@
     <!-- Main Student Notes Application Container -->
     <div class="app-container" id="appContainer">
         <div class="container">
+            <!-- App Header -->
             <header class="app-header glass-card">
-                <a href="#" class="logo">
+                <a href="#" class="logo" id="appLogoBtn">
                     <div class="logo-icon-bg">
                         <i class="fas fa-book-open"></i>
                     </div>
                     <div class="logo-text">
                         <span class="logo-title">MyNotes</span>
-                        <span class="logo-subtitle">Student Sharing Portal</span>
+                        <span class="logo-subtitle">Universal Notes Platform</span>
                     </div>
                 </a>
                 
@@ -154,7 +150,7 @@
                     </div>
                     <div class="user-details">
                         <div class="user-name" id="userName">Student</div>
-                        <div class="user-email" id="userEmail">guest@mynotes.edu</div>
+                        <div class="user-email" id="userEmail">student@mynotes.edu</div>
                     </div>
 
                     <div class="header-actions">
@@ -171,67 +167,217 @@
                 </div>
             </header>
 
-            <!-- Upload Section with Full Academic Notes Metadata -->
-            <section class="upload-section glass-card">
+            <!-- Navigation Tabs Bar -->
+            <nav class="main-nav-tabs glass-card">
+                <button class="nav-tab-btn active" id="tabAllNotes" data-view="feed">
+                    <i class="fas fa-layer-group"></i> All Notes
+                </button>
+                <button class="nav-tab-btn" id="tabSchoolNotes" data-view="school">
+                    <i class="fas fa-school"></i> School (Class 1-12)
+                </button>
+                <button class="nav-tab-btn" id="tabEngineeringNotes" data-view="engineering">
+                    <i class="fas fa-microchip"></i> Engineering & Diploma
+                </button>
+                <button class="nav-tab-btn" id="tabExploreSubjects" data-view="subjects">
+                    <i class="fas fa-book"></i> Explore Subjects
+                </button>
+                <button class="nav-tab-btn" id="tabSavedNotes" data-view="saved">
+                    <i class="fas fa-bookmark"></i> Saved Notes (<span id="savedCount">0</span>)
+                </button>
+                <button class="nav-tab-btn nav-tab-upload" id="tabUploadNotes" data-view="upload">
+                    <i class="fas fa-cloud-upload-alt"></i> Upload Notes
+                </button>
+            </nav>
+
+            <!-- Dynamic Upload Section -->
+            <section class="upload-section glass-card" id="uploadSection">
                 <div class="section-title">
                     <i class="fas fa-cloud-upload-alt"></i>
-                    <h3>Upload Notes & Study Material</h3>
+                    <h3>Upload Notes & Academic Study Material</h3>
                 </div>
 
                 <div class="upload-form-grid">
+                    <!-- Education Level Selector -->
                     <div class="form-group">
-                        <label for="noteTitle"><i class="fas fa-heading"></i> Note Title *</label>
-                        <input type="text" id="noteTitle" class="form-control" placeholder="e.g., Data Structures Unit 3 Handwritten Notes" required>
+                        <label for="educationLevel"><i class="fas fa-graduation-cap"></i> Education Level *</label>
+                        <select id="educationLevel" class="form-control">
+                            <option value="Engineering" selected>Engineering (B.Tech / B.E.)</option>
+                            <option value="Diploma">Diploma / Polytechnic</option>
+                            <option value="School">School (Class 1 to Class 12)</option>
+                            <option value="Class 1">Class 1</option>
+                            <option value="Class 2">Class 2</option>
+                            <option value="Class 3">Class 3</option>
+                            <option value="Class 4">Class 4</option>
+                            <option value="Class 5">Class 5</option>
+                            <option value="Class 6">Class 6</option>
+                            <option value="Class 7">Class 7</option>
+                            <option value="Class 8">Class 8</option>
+                            <option value="Class 9">Class 9</option>
+                            <option value="Class 10">Class 10</option>
+                            <option value="Class 11">Class 11</option>
+                            <option value="Class 12">Class 12</option>
+                            <option value="Postgraduate">Postgraduate (M.Tech / MCA / M.Sc)</option>
+                            <option value="Other">Other Academic Program</option>
+                        </select>
                     </div>
-                    
+
+                    <!-- School Class Level Group (Conditional) -->
+                    <div class="form-group" id="classLevelGroup" style="display: none;">
+                        <label for="classLevel"><i class="fas fa-child"></i> School Class *</label>
+                        <select id="classLevel" class="form-control">
+                            <option value="Class 10" selected>Class 10</option>
+                            <option value="Class 1">Class 1</option>
+                            <option value="Class 2">Class 2</option>
+                            <option value="Class 3">Class 3</option>
+                            <option value="Class 4">Class 4</option>
+                            <option value="Class 5">Class 5</option>
+                            <option value="Class 6">Class 6</option>
+                            <option value="Class 7">Class 7</option>
+                            <option value="Class 8">Class 8</option>
+                            <option value="Class 9">Class 9</option>
+                            <option value="Class 11">Class 11</option>
+                            <option value="Class 12">Class 12</option>
+                        </select>
+                    </div>
+
+                    <!-- Stream Group (Class 11-12) -->
+                    <div class="form-group" id="streamGroup" style="display: none;">
+                        <label for="streamSelect"><i class="fas fa-atom"></i> Academic Stream</label>
+                        <select id="streamSelect" class="form-control">
+                            <option value="Science">Science (PCM / PCB)</option>
+                            <option value="Commerce">Commerce</option>
+                            <option value="Arts/Humanities">Arts / Humanities</option>
+                            <option value="N/A">General</option>
+                        </select>
+                    </div>
+
+                    <!-- Branch Selector (35+ Engineering & Diploma Branches) -->
+                    <div class="form-group" id="branchGroup">
+                        <label for="branchSelect"><i class="fas fa-code-branch"></i> Engineering / Diploma Branch *</label>
+                        <select id="branchSelect" class="form-control">
+                            <option value="Computer Science Engineering">Computer Science Engineering (CSE)</option>
+                            <option value="Information Technology">Information Technology (IT)</option>
+                            <option value="Artificial Intelligence">Artificial Intelligence (AI)</option>
+                            <option value="Artificial Intelligence & Machine Learning">AI & Machine Learning (AI/ML)</option>
+                            <option value="Data Science">Data Science</option>
+                            <option value="Cyber Security">Cyber Security</option>
+                            <option value="Software Engineering">Software Engineering</option>
+                            <option value="Electronics & Communication Engineering">Electronics & Communication (ECE)</option>
+                            <option value="Electrical Engineering">Electrical Engineering (EE/EEE)</option>
+                            <option value="Mechanical Engineering">Mechanical Engineering (ME)</option>
+                            <option value="Civil Engineering">Civil Engineering (CE)</option>
+                            <option value="Chemical Engineering">Chemical Engineering</option>
+                            <option value="Automobile Engineering">Automobile Engineering</option>
+                            <option value="Aerospace Engineering">Aerospace Engineering</option>
+                            <option value="Aeronautical Engineering">Aeronautical Engineering</option>
+                            <option value="Biomedical Engineering">Biomedical Engineering</option>
+                            <option value="Biotechnology Engineering">Biotechnology Engineering</option>
+                            <option value="Robotics Engineering">Robotics & Mechatronics</option>
+                            <option value="Environmental Engineering">Environmental Engineering</option>
+                            <option value="Mining Engineering">Mining Engineering</option>
+                            <option value="Petroleum Engineering">Petroleum Engineering</option>
+                            <option value="Agricultural Engineering">Agricultural Engineering</option>
+                            <option value="Food Technology">Food Technology</option>
+                            <option value="Textile Engineering">Textile Engineering</option>
+                            <option value="Metallurgical Engineering">Metallurgical & Materials</option>
+                            <option value="Marine Engineering">Marine Engineering</option>
+                            <option value="Telecommunication Engineering">Telecommunication Engineering</option>
+                            <option value="Power Engineering">Power Engineering</option>
+                            <option value="Structural Engineering">Structural Engineering</option>
+                            <option value="Other Branch">+ Add Custom Branch...</option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Branch Input -->
+                    <div class="form-group" id="customBranchGroup" style="display: none;">
+                        <label for="customBranchInput"><i class="fas fa-plus-circle"></i> Custom Branch Name *</label>
+                        <input type="text" id="customBranchInput" class="form-control" placeholder="Enter branch name (e.g. Mechatronics)">
+                    </div>
+
+                    <!-- Year & Semester Group -->
+                    <div class="form-group" id="yearSemesterGroup">
+                        <div style="display: flex; gap: 10px;">
+                            <div style="flex: 1;">
+                                <label for="noteYear"><i class="fas fa-calendar-alt"></i> Year</label>
+                                <select id="noteYear" class="form-control">
+                                    <option value="1st Year">1st Year</option>
+                                    <option value="2nd Year">2nd Year</option>
+                                    <option value="3rd Year">3rd Year</option>
+                                    <option value="4th Year">4th Year</option>
+                                    <option value="N/A">N/A</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1;">
+                                <label for="noteSemester"><i class="fas fa-layer-group"></i> Semester *</label>
+                                <select id="noteSemester" class="form-control">
+                                    <option value="Sem 1">Semester 1</option>
+                                    <option value="Sem 2">Semester 2</option>
+                                    <option value="Sem 3">Semester 3</option>
+                                    <option value="Sem 4">Semester 4</option>
+                                    <option value="Sem 5">Semester 5</option>
+                                    <option value="Sem 6">Semester 6</option>
+                                    <option value="Sem 7">Semester 7</option>
+                                    <option value="Sem 8">Semester 8</option>
+                                    <option value="All Semesters">All Semesters</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Subject Selector -->
                     <div class="form-group">
-                        <label for="noteSubject"><i class="fas fa-book"></i> Subject / Course *</label>
+                        <label for="noteSubject"><i class="fas fa-book"></i> Subject *</label>
                         <select id="noteSubject" class="form-control">
-                            <option value="Computer Science">Computer Science</option>
-                            <option value="Mathematics">Mathematics</option>
-                            <option value="Data Structures & Algorithms">Data Structures & Algorithms</option>
-                            <option value="Physics">Physics</option>
-                            <option value="Electronics & Communication">Electronics & Communication</option>
-                            <option value="Mechanical Engineering">Mechanical Engineering</option>
-                            <option value="Civil Engineering">Civil Engineering</option>
-                            <option value="Chemistry">Chemistry</option>
-                            <option value="Business Administration">Business Administration</option>
-                            <option value="General">General / Other</option>
+                            <!-- Populated dynamically by script.js based on Education Level & Branch -->
                         </select>
                     </div>
 
+                    <!-- Custom Subject Input -->
+                    <div class="form-group" id="customSubjectGroup" style="display: none;">
+                        <label for="customSubjectInput"><i class="fas fa-plus-circle"></i> Custom Subject Name *</label>
+                        <input type="text" id="customSubjectInput" class="form-control" placeholder="Enter subject name">
+                    </div>
+
+                    <!-- Category Selector -->
                     <div class="form-group">
-                        <label for="noteCourse"><i class="fas fa-graduation-cap"></i> Branch / Degree</label>
-                        <select id="noteCourse" class="form-control">
-                            <option value="B.Tech / B.E.">B.Tech / B.E.</option>
-                            <option value="BCA">BCA</option>
-                            <option value="MCA">MCA</option>
-                            <option value="B.Sc">B.Sc</option>
-                            <option value="M.Sc">M.Sc</option>
-                            <option value="Diploma">Diploma</option>
-                            <option value="General">General</option>
+                        <label for="noteCategory"><i class="fas fa-tags"></i> Note Category *</label>
+                        <select id="noteCategory" class="form-control">
+                            <option value="Class Notes">Class Notes / Lecture Notes</option>
+                            <option value="Handwritten Notes">Handwritten Notes</option>
+                            <option value="Question Papers">Question Papers (PYQs)</option>
+                            <option value="Solved Papers">Solved Question Papers</option>
+                            <option value="Assignments">Assignments / Homework</option>
+                            <option value="Important Questions">Important Questions</option>
+                            <option value="Lab Manuals">Lab Manuals / Practical Files</option>
+                            <option value="Formula Sheets">Formula Sheets & Cheat Sheets</option>
+                            <option value="Revision Notes">Short / Revision Notes</option>
+                            <option value="Projects">Projects & Lab Records</option>
+                            <option value="Reference Material">Reference Material & E-books</option>
+                            <option value="Other">Other Material</option>
                         </select>
                     </div>
 
+                    <!-- Note Title -->
                     <div class="form-group">
-                        <label for="noteSemester"><i class="fas fa-layer-group"></i> Semester</label>
-                        <select id="noteSemester" class="form-control">
-                            <option value="Sem 1">Semester 1</option>
-                            <option value="Sem 2">Semester 2</option>
-                            <option value="Sem 3">Semester 3</option>
-                            <option value="Sem 4">Semester 4</option>
-                            <option value="Sem 5">Semester 5</option>
-                            <option value="Sem 6">Semester 6</option>
-                            <option value="Sem 7">Semester 7</option>
-                            <option value="Sem 8">Semester 8</option>
-                            <option value="All Semesters">All Semesters</option>
-                        </select>
+                        <label for="noteTitle"><i class="fas fa-heading"></i> Document Title *</label>
+                        <input type="text" id="noteTitle" class="form-control" placeholder="e.g. Data Structures Unit 3 Complete Notes" required>
+                    </div>
+                </div>
+
+                <div class="upload-form-grid" style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label for="noteTags"><i class="fas fa-hashtag"></i> Tags (Comma Separated)</label>
+                        <input type="text" id="noteTags" class="form-control" placeholder="e.g. Trees, Graphs, Unit 3, Exam Notes">
+                    </div>
+                    <div class="form-group">
+                        <label for="academicYear"><i class="fas fa-university"></i> Academic Year</label>
+                        <input type="text" id="academicYear" class="form-control" value="2025-2026" placeholder="2025-2026">
                     </div>
                 </div>
 
                 <div class="form-group" style="margin-top: 15px;">
                     <label for="noteDescription"><i class="fas fa-align-left"></i> Description / Topic Summary</label>
-                    <textarea id="noteDescription" class="form-control" rows="2" placeholder="Briefly describe what topics are covered in this document..."></textarea>
+                    <textarea id="noteDescription" class="form-control" rows="2" placeholder="Briefly describe what topics, formulas, or units are covered in this note document..."></textarea>
                 </div>
 
                 <!-- Drag and Drop Dropzone -->
@@ -261,22 +407,23 @@
                     <div class="progress-bar">
                         <div class="progress" id="progressBar"></div>
                     </div>
-                    <p id="progressText" style="text-align: center; margin-top: 8px; font-weight: 600;">Uploading files to shared storage...</p>
+                    <p id="progressText" style="text-align: center; margin-top: 8px; font-weight: 600;">Uploading notes to Cloud Storage...</p>
                 </div>
             </section>
 
-            <!-- Search, Filter & Discovery Bar -->
+            <!-- Search, Multi-Criteria Filter & Discovery Bar -->
             <section class="search-filter-section glass-card">
                 <div class="search-bar-row">
                     <div class="search-box">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="searchInput" placeholder="Search notes by title, subject, filename, semester...">
+                        <input type="text" id="searchInput" placeholder="Search notes by title, subject, branch, class, topic, filename...">
                     </div>
                 </div>
 
+                <!-- File Type Filter Buttons -->
                 <div class="filter-controls-row">
                     <div class="filter-buttons" id="typeFilterButtons">
-                        <button class="filter-btn active" data-filter="all"><i class="fas fa-th-large"></i> All Notes</button>
+                        <button class="filter-btn active" data-filter="all"><i class="fas fa-th-large"></i> All Formats</button>
                         <button class="filter-btn" data-filter="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
                         <button class="filter-btn" data-filter="doc"><i class="fas fa-file-word"></i> Documents</button>
                         <button class="filter-btn" data-filter="img"><i class="fas fa-file-image"></i> Images</button>
@@ -285,67 +432,133 @@
                     </div>
 
                     <div class="dropdown-filters">
-                        <select id="subjectFilter" class="filter-dropdown">
-                            <option value="all">All Subjects</option>
-                            <option value="Computer Science">Computer Science</option>
-                            <option value="Mathematics">Mathematics</option>
-                            <option value="Data Structures & Algorithms">Data Structures</option>
-                            <option value="Physics">Physics</option>
-                            <option value="Electronics & Communication">Electronics</option>
+                        <!-- Education Level Filter -->
+                        <select id="filterEducationLevel" class="filter-dropdown">
+                            <option value="all">All Education Levels</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Diploma">Diploma / Polytechnic</option>
+                            <option value="School">School (Class 1-12)</option>
+                            <option value="Class 10">Class 10</option>
+                            <option value="Class 12">Class 12</option>
+                            <option value="Postgraduate">Postgraduate</option>
+                        </select>
+
+                        <!-- Branch Filter -->
+                        <select id="filterBranch" class="filter-dropdown">
+                            <option value="all">All Branches</option>
+                            <option value="Computer Science Engineering">CSE</option>
+                            <option value="Information Technology">IT</option>
+                            <option value="Artificial Intelligence & Machine Learning">AI/ML</option>
+                            <option value="Data Science">Data Science</option>
+                            <option value="Cyber Security">Cyber Security</option>
+                            <option value="Electronics & Communication Engineering">ECE</option>
+                            <option value="Electrical Engineering">EE/EEE</option>
                             <option value="Mechanical Engineering">Mechanical</option>
                             <option value="Civil Engineering">Civil</option>
-                            <option value="Chemistry">Chemistry</option>
-                            <option value="Business Administration">Business</option>
-                            <option value="General">General</option>
                         </select>
 
-                        <select id="semesterFilter" class="filter-dropdown">
+                        <!-- Semester Filter -->
+                        <select id="filterSemester" class="filter-dropdown">
                             <option value="all">All Semesters</option>
-                            <option value="Sem 1">Semester 1</option>
-                            <option value="Sem 2">Semester 2</option>
-                            <option value="Sem 3">Semester 3</option>
-                            <option value="Sem 4">Semester 4</option>
-                            <option value="Sem 5">Semester 5</option>
-                            <option value="Sem 6">Semester 6</option>
-                            <option value="Sem 7">Semester 7</option>
-                            <option value="Sem 8">Semester 8</option>
+                            <option value="Sem 1">Sem 1</option>
+                            <option value="Sem 2">Sem 2</option>
+                            <option value="Sem 3">Sem 3</option>
+                            <option value="Sem 4">Sem 4</option>
+                            <option value="Sem 5">Sem 5</option>
+                            <option value="Sem 6">Sem 6</option>
+                            <option value="Sem 7">Sem 7</option>
+                            <option value="Sem 8">Sem 8</option>
                         </select>
-                    </div>
-                </div>
-            </section>
 
-            <!-- Notes Grid Container -->
-            <section class="files-container">
-                <div class="section-header-flex">
-                    <h2><i class="fas fa-folder-open"></i> Shared Student Notes (<span id="notesCount">0</span>)</h2>
-                    <div class="sort-controls">
-                        <label for="sortBySelect"><i class="fas fa-sort"></i> Sort:</label>
-                        <select id="sortBySelect" class="sort-dropdown">
+                        <!-- Category Filter -->
+                        <select id="filterCategory" class="filter-dropdown">
+                            <option value="all">All Categories</option>
+                            <option value="Class Notes">Class Notes</option>
+                            <option value="Handwritten Notes">Handwritten Notes</option>
+                            <option value="Question Papers">Question Papers (PYQs)</option>
+                            <option value="Solved Papers">Solved Papers</option>
+                            <option value="Assignments">Assignments</option>
+                            <option value="Lab Manuals">Lab Manuals</option>
+                            <option value="Formula Sheets">Formula Sheets</option>
+                        </select>
+
+                        <!-- Sort By -->
+                        <select id="sortBySelect" class="filter-dropdown">
                             <option value="newest">Newest First</option>
                             <option value="downloads">Most Downloaded</option>
                             <option value="title">Title (A-Z)</option>
-                            <option value="size">File Size</option>
+                            <option value="oldest">Oldest First</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Active Filter Chips Bar -->
+                <div class="active-filter-chips-bar" id="activeFilterChipsBar" style="display: none;">
+                    <span class="chips-label"><i class="fas fa-filter"></i> Active Filters:</span>
+                    <div class="chips-container" id="chipsContainer"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="clearAllFiltersBtn">
+                        <i class="fas fa-times-circle"></i> Clear All
+                    </button>
+                </div>
+            </section>
+
+            <!-- Feed View / Main Grid Container -->
+            <section class="files-container" id="feedViewContainer">
+                <div class="section-header-flex">
+                    <h2><i class="fas fa-folder-open"></i> Academic Notes Library (<span id="notesCount">0</span>)</h2>
+                    <div class="view-mode-badge" id="activeViewBadge">
+                        <i class="fas fa-globe"></i> Universal Feed
                     </div>
                 </div>
 
                 <div class="files-grid" id="filesGrid">
-                    <!-- Dynamic note cards inserted via script.js -->
+                    <!-- Note Cards dynamically rendered here -->
+                </div>
+            </section>
+
+            <!-- Directory Views (School, Engineering, Subjects, Saved) -->
+            <section class="directory-container glass-card" id="schoolDirectoryView" style="display: none;">
+                <div class="directory-header">
+                    <h2><i class="fas fa-school"></i> School Notes Directory (Class 1 to Class 12)</h2>
+                    <p>Browse curriculum notes and study material organized by school class and subjects.</p>
+                </div>
+                <div class="class-cards-grid" id="schoolClassCardsGrid">
+                    <!-- School Class cards generated dynamically -->
+                </div>
+            </section>
+
+            <section class="directory-container glass-card" id="engineeringDirectoryView" style="display: none;">
+                <div class="directory-header">
+                    <h2><i class="fas fa-microchip"></i> Engineering & Diploma Branch Directory</h2>
+                    <p>Select your branch to view semester-wise subjects and notes (Sem 1 to Sem 8).</p>
+                </div>
+                <div class="branch-cards-grid" id="engineeringBranchCardsGrid">
+                    <!-- Engineering Branch cards generated dynamically -->
+                </div>
+            </section>
+
+            <section class="directory-container glass-card" id="subjectsDirectoryView" style="display: none;">
+                <div class="directory-header">
+                    <h2><i class="fas fa-book-reader"></i> Explore All Subjects Index</h2>
+                    <p>Complete subject catalog across Engineering, Diploma, and School education levels.</p>
+                </div>
+                <div class="subjects-grid" id="subjectsCatalogGrid">
+                    <!-- Subject index cards generated dynamically -->
                 </div>
             </section>
         </div>
     </div>
 
-    <!-- File Preview Modal -->
-    <div class="preview-modal" id="previewModal" role="dialog" aria-labelledby="previewTitle" aria-hidden="true">
+    <!-- Preview Document Modal -->
+    <div class="preview-modal" id="previewModal" role="dialog" aria-hidden="true">
         <div class="preview-content">
             <div class="preview-header">
-                <h3 id="previewTitle"><i class="fas fa-eye"></i> Note Preview</h3>
+                <h3 id="previewTitle"><i class="fas fa-file-alt"></i> Note Document Preview</h3>
                 <div class="preview-header-actions">
-                    <button class="btn btn-sm btn-primary" id="modalDownloadBtn">
-                        <i class="fas fa-download"></i> Download
+                    <button class="btn btn-primary btn-sm" id="modalDownloadBtn">
+                        <i class="fas fa-download"></i> Download Note
                     </button>
-                    <button class="close-preview" id="closePreview" aria-label="Close preview">
+                    <button class="close-preview" id="closePreview" title="Close preview">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -356,7 +569,7 @@
         </div>
     </div>
 
-    <!-- Delete Confirmation Dialog -->
+    <!-- Delete Confirmation Modal -->
     <div class="preview-modal" id="deleteConfirmModal" role="dialog" aria-hidden="true">
         <div class="preview-content" style="max-width: 450px; text-align: center;">
             <div style="font-size: 48px; color: var(--danger); margin-bottom: 15px;">
@@ -368,6 +581,39 @@
                 <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
                 <button type="button" class="btn btn-danger" id="confirmDeleteBtn"><i class="fas fa-trash"></i> Delete Note</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Report Note Modal -->
+    <div class="preview-modal" id="reportModal" role="dialog" aria-hidden="true">
+        <div class="preview-content" style="max-width: 500px;">
+            <div class="preview-header">
+                <h3><i class="fas fa-flag" style="color: var(--warning);"></i> Report Note Document</h3>
+                <button class="close-preview" id="closeReportModal" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="reportForm" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label for="reportReason">Reason for Reporting *</label>
+                    <select id="reportReason" class="form-control" required>
+                        <option value="Wrong Content">Wrong or Irrelevant Content</option>
+                        <option value="Spam">Spam / Low Quality</option>
+                        <option value="Duplicate">Duplicate Note</option>
+                        <option value="Copyright Concern">Copyright / IP Concern</option>
+                        <option value="Inappropriate Content">Inappropriate / Unsafe Content</option>
+                        <option value="Other">Other Issue</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="reportDetails">Additional Details</label>
+                    <textarea id="reportDetails" class="form-control" rows="3" placeholder="Please describe the issue with this note file..."></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" id="cancelReportBtn">Cancel</button>
+                    <button type="submit" class="btn btn-warning"><i class="fas fa-paper-plane"></i> Submit Report</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -400,13 +646,13 @@
         </div>
     </div>
 
-    <!-- Floating Toast Notification System -->
+    <!-- Toast Notification System -->
     <div class="notification" id="notification" role="status" aria-live="polite">
         <i class="fas fa-check-circle" id="notificationIcon"></i>
         <span id="notificationText">Operation completed successfully</span>
     </div>
 
-    <!-- Application Configurations and Frontend Scripts -->
+    <!-- Application Scripts -->
     <script src="firebase-config.js"></script>
     <script src="script.js"></script>
 </body>

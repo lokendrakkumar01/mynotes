@@ -115,7 +115,8 @@ async function uploadToCloudinary(filePath, originalname) {
             folder: 'mynotes_uploads',
             resource_type: resourceType,
             use_filename: true,
-            unique_filename: true
+            unique_filename: true,
+            flags: 'attachment:false'
         });
 
         return result;
@@ -152,7 +153,7 @@ app.get('/health', async (req, res) => {
     const dbStatus = await db.testConnection();
     res.json({
         status: 'ok',
-        message: 'MyNotes Server is running with MongoDB & Cloudinary',
+        message: 'MyNotes Universal Platform Server is running with MongoDB Atlas & Cloudinary',
         database: dbStatus ? 'connected' : 'local_json',
         ip: getServerIP(),
         port: PORT
@@ -244,18 +245,31 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// GET All Shared Notes (Shared Platform Feed)
+// GET Shared Notes with Multi-Criteria Advanced Filtering & Search
 app.get('/api/files', authenticateToken, async (req, res) => {
     try {
-        const files = await db.getPublicFiles();
-        res.json({ files });
+        const filters = {
+            educationLevel: req.query.educationLevel,
+            classLevel: req.query.classLevel,
+            stream: req.query.stream,
+            branch: req.query.branch,
+            semester: req.query.semester,
+            subject: req.query.subject,
+            category: req.query.category,
+            type: req.query.type,
+            search: req.query.search,
+            sort: req.query.sort
+        };
+
+        const files = await db.getPublicFiles(filters);
+        res.json({ files, count: files.length });
     } catch (error) {
         console.error('Fetch shared notes error:', error);
         res.status(500).json({ message: 'Error fetching shared notes' });
     }
 });
 
-// Upload Notes with Cloudinary Storage & MongoDB Record Creation
+// Upload Notes with Full Academic Metadata (School, Diploma, Engineering 35+ Branches)
 app.post('/api/files/upload', authenticateToken, upload.array('files', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
@@ -263,14 +277,32 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
         }
 
         const title = req.body.title || '';
-        const subject = req.body.subject || 'General';
-        const semester = req.body.semester || 'All Semesters';
+        const educationLevel = req.body.educationLevel || 'Engineering';
+        const classLevel = req.body.classLevel || 'N/A';
+        const stream = req.body.stream || 'N/A';
         const course = req.body.course || 'General';
+        const branch = req.body.branch || 'Computer Science Engineering';
+        const year = req.body.year || 'N/A';
+        const semester = req.body.semester || 'Sem 1';
+        const subject = req.body.subject || 'General';
+        const category = req.body.category || 'Class Notes';
         const description = req.body.description || '';
+        const tags = req.body.tags ? String(req.body.tags).split(',').map(t => t.trim()) : [];
+        const academicYear = req.body.academicYear || '2025-2026';
+        const isCustomSubject = req.body.isCustomSubject === 'true' || req.body.isCustomSubject === true;
+        const isCustomBranch = req.body.isCustomBranch === 'true' || req.body.isCustomBranch === true;
 
         const uploaderId = req.user ? req.user.id : 'anonymous';
         const uploaderName = req.user ? req.user.username : 'Student';
         const uploaderEmail = req.user ? (req.user.email || '') : '';
+
+        // If custom subject or branch supplied, log into taxonomy catalog
+        if (isCustomSubject && subject) {
+            await db.addCustomTaxonomy('subject', subject, category, uploaderId);
+        }
+        if (isCustomBranch && branch) {
+            await db.addCustomTaxonomy('branch', branch, educationLevel, uploaderId);
+        }
 
         const uploadedFiles = [];
         for (const file of req.files) {
@@ -289,15 +321,27 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
                 type: fileType,
                 size: file.size,
                 mimetype: file.mimetype,
-                subject: subject,
-                semester: semester,
+                
+                educationLevel: educationLevel,
+                classLevel: classLevel,
+                stream: stream,
                 course: course,
+                branch: branch,
+                year: year,
+                semester: semester,
+                subject: subject,
+                category: category,
                 description: description,
+                tags: tags,
+                academicYear: academicYear,
+                isCustomSubject: isCustomSubject,
+                isCustomBranch: isCustomBranch,
+
                 uploaderId: uploaderId,
                 uploader: uploaderName,
                 uploaderEmail: uploaderEmail,
                 downloadCount: 0,
-                uploadDate: new Date().toISOString()
+                uploadDate: new Date()
             };
 
             const savedFile = await db.createFile(fileData);
@@ -323,7 +367,7 @@ app.get('/api/files/:id/download', async (req, res) => {
             return res.status(404).json({ message: 'Note file not found' });
         }
 
-        // Increment download counter
+        // Increment download counter in MongoDB Atlas / Local DB
         await db.incrementDownloadCount(req.params.id);
 
         const originalName = file.name || file.title || 'note_document';
@@ -354,6 +398,40 @@ app.get('/api/files/:id/download', async (req, res) => {
     } catch (error) {
         console.error('Download error:', error);
         res.status(500).json({ message: 'Error initiating file download' });
+    }
+});
+
+// Report Note API Endpoint
+app.post('/api/reports', authenticateToken, async (req, res) => {
+    try {
+        const { fileId, fileTitle, reason, details } = req.body;
+        if (!fileId || !reason) {
+            return res.status(400).json({ message: 'fileId and reason are required' });
+        }
+
+        const report = await db.createReport({
+            fileId,
+            fileTitle: fileTitle || 'Note Document',
+            reporterId: req.user ? req.user.id : 'anonymous',
+            reporterName: req.user ? req.user.username : 'Student',
+            reason,
+            details: details || ''
+        });
+
+        res.status(201).json({ message: 'Report submitted successfully', report });
+    } catch (error) {
+        console.error('Report note error:', error);
+        res.status(500).json({ message: 'Error submitting report' });
+    }
+});
+
+// Custom Taxonomy API Endpoint (Get Custom Subjects & Branches)
+app.get('/api/taxonomy', async (req, res) => {
+    try {
+        const list = await db.getCustomTaxonomies();
+        res.json({ taxonomy: list });
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching taxonomy' });
     }
 });
 
@@ -406,7 +484,7 @@ async function startServer() {
 
     app.listen(PORT, '0.0.0.0', () => {
         console.log('\n==================================================');
-        console.log('🚀 MYNOTES - STUDENT NOTES SHARING PLATFORM');
+        console.log('🚀 MYNOTES - UNIVERSAL ACADEMIC PLATFORM SERVER');
         console.log('==================================================');
         console.log(`📍 Local access:   http://localhost:${PORT}`);
         console.log(`🌐 Network access: http://${serverIP}:${PORT}`);

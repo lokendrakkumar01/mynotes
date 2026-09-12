@@ -1,5 +1,5 @@
 // MyNotes Platform Core JavaScript Engine
-// Supports Dual Mode: Express REST API with Cloudinary & MongoDB Atlas + Fallback Cloud Storage
+// Supports Universal Academic Platform: Class 1-12, Diploma, and 35+ Engineering Branches
 
 // DOM Elements
 const loader = document.getElementById('loader');
@@ -23,7 +23,6 @@ const profileImageInput = document.getElementById('profileImageInput');
 const profileUploadBtn = document.getElementById('profileUploadBtn');
 const profilePlaceholder = document.getElementById('profilePlaceholder');
 const profileImage = document.getElementById('profileImage');
-const googleLoginBtn = document.getElementById('googleLoginBtn');
 const guestBtn = document.getElementById('guestBtn');
 
 const headerProfilePlaceholder = document.getElementById('headerProfilePlaceholder');
@@ -34,15 +33,42 @@ const logoutBtn = document.getElementById('logoutBtn');
 const contactBtn = document.getElementById('contactBtn');
 const themeToggle = document.getElementById('themeToggle');
 const themeIcon = document.getElementById('themeIcon');
+const appLogoBtn = document.getElementById('appLogoBtn');
+
+// Navigation Tabs
+const tabAllNotes = document.getElementById('tabAllNotes');
+const tabSchoolNotes = document.getElementById('tabSchoolNotes');
+const tabEngineeringNotes = document.getElementById('tabEngineeringNotes');
+const tabExploreSubjects = document.getElementById('tabExploreSubjects');
+const tabSavedNotes = document.getElementById('tabSavedNotes');
+const tabUploadNotes = document.getElementById('tabUploadNotes');
+const savedCount = document.getElementById('savedCount');
 
 // Upload Elements
+const uploadSection = document.getElementById('uploadSection');
+const educationLevel = document.getElementById('educationLevel');
+const classLevelGroup = document.getElementById('classLevelGroup');
+const classLevel = document.getElementById('classLevel');
+const streamGroup = document.getElementById('streamGroup');
+const streamSelect = document.getElementById('streamSelect');
+const branchGroup = document.getElementById('branchGroup');
+const branchSelect = document.getElementById('branchSelect');
+const customBranchGroup = document.getElementById('customBranchGroup');
+const customBranchInput = document.getElementById('customBranchInput');
+const yearSemesterGroup = document.getElementById('yearSemesterGroup');
+const noteYear = document.getElementById('noteYear');
+const noteSemester = document.getElementById('noteSemester');
+const noteSubject = document.getElementById('noteSubject');
+const customSubjectGroup = document.getElementById('customSubjectGroup');
+const customSubjectInput = document.getElementById('customSubjectInput');
+const noteCategory = document.getElementById('noteCategory');
+const noteTitle = document.getElementById('noteTitle');
+const noteTags = document.getElementById('noteTags');
+const academicYear = document.getElementById('academicYear');
+const noteDescription = document.getElementById('noteDescription');
+
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
-const noteTitle = document.getElementById('noteTitle');
-const noteSubject = document.getElementById('noteSubject');
-const noteCourse = document.getElementById('noteCourse');
-const noteSemester = document.getElementById('noteSemester');
-const noteDescription = document.getElementById('noteDescription');
 const selectedFilesBar = document.getElementById('selectedFilesBar');
 const selectedFilesCount = document.getElementById('selectedFilesCount');
 const startUploadBtn = document.getElementById('startUploadBtn');
@@ -51,14 +77,30 @@ const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 
-// Search & Filter Elements
+// Search & Advanced Filter Elements
 const searchInput = document.getElementById('searchInput');
 const typeFilterButtons = document.querySelectorAll('#typeFilterButtons .filter-btn');
-const subjectFilter = document.getElementById('subjectFilter');
-const semesterFilter = document.getElementById('semesterFilter');
+const filterEducationLevel = document.getElementById('filterEducationLevel');
+const filterBranch = document.getElementById('filterBranch');
+const filterSemester = document.getElementById('filterSemester');
+const filterCategory = document.getElementById('filterCategory');
 const sortBySelect = document.getElementById('sortBySelect');
+const activeFilterChipsBar = document.getElementById('activeFilterChipsBar');
+const chipsContainer = document.getElementById('chipsContainer');
+const clearAllFiltersBtn = document.getElementById('clearAllFiltersBtn');
+
+// View Containers
+const feedViewContainer = document.getElementById('feedViewContainer');
 const filesGrid = document.getElementById('filesGrid');
 const notesCount = document.getElementById('notesCount');
+const activeViewBadge = document.getElementById('activeViewBadge');
+
+const schoolDirectoryView = document.getElementById('schoolDirectoryView');
+const schoolClassCardsGrid = document.getElementById('schoolClassCardsGrid');
+const engineeringDirectoryView = document.getElementById('engineeringDirectoryView');
+const engineeringBranchCardsGrid = document.getElementById('engineeringBranchCardsGrid');
+const subjectsDirectoryView = document.getElementById('subjectsDirectoryView');
+const subjectsCatalogGrid = document.getElementById('subjectsCatalogGrid');
 
 // Modals
 const previewModal = document.getElementById('previewModal');
@@ -66,10 +108,19 @@ const closePreview = document.getElementById('closePreview');
 const previewTitle = document.getElementById('previewTitle');
 const previewBody = document.getElementById('previewBody');
 const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+
 const deleteConfirmModal = document.getElementById('deleteConfirmModal');
 const deleteConfirmText = document.getElementById('deleteConfirmText');
 const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+const reportModal = document.getElementById('reportModal');
+const closeReportModal = document.getElementById('closeReportModal');
+const reportForm = document.getElementById('reportForm');
+const reportReason = document.getElementById('reportReason');
+const reportDetails = document.getElementById('reportDetails');
+const cancelReportBtn = document.getElementById('cancelReportBtn');
+
 const contactModal = document.getElementById('contactModal');
 const closeContact = document.getElementById('closeContact');
 const contactForm = document.getElementById('contactForm');
@@ -81,16 +132,41 @@ const notificationIcon = document.getElementById('notificationIcon');
 let currentUser = null;
 let notesFeed = [];
 let pendingFiles = [];
-let activeTypeFilter = 'all';
-let activeSubjectFilter = 'all';
+let activeView = 'feed'; // 'feed', 'school', 'engineering', 'subjects', 'saved', 'upload'
+let activeFormatFilter = 'all';
+let activeEducationFilter = 'all';
+let activeBranchFilter = 'all';
 let activeSemesterFilter = 'all';
+let activeCategoryFilter = 'all';
 let activeSearchQuery = '';
 let activeSort = 'newest';
 let pendingDeleteId = null;
+let pendingReportNote = null;
 let activePreviewNote = null;
+let bookmarkedIds = JSON.parse(localStorage.getItem('bookmarkedNotes') || '[]');
 let authToken = localStorage.getItem('authToken') || null;
 
-// Determine Dynamic API Base URL
+// Academic Taxonomy Datasets
+const PREDEFINED_SUBJECTS = {
+    school_primary: ['Mathematics', 'English', 'Hindi', 'Science', 'Environmental Studies', 'Computer', 'General Knowledge', 'Social Studies', 'Art', '+ Add Custom Subject...'],
+    school_middle: ['Mathematics', 'Science', 'English', 'Hindi', 'Social Science', 'History', 'Geography', 'Civics', 'Computer Science', 'Sanskrit', 'General Knowledge', '+ Add Custom Subject...'],
+    school_secondary: ['Mathematics', 'Science', 'Physics', 'Chemistry', 'Biology', 'English', 'Hindi', 'Social Science', 'History', 'Geography', 'Political Science', 'Economics', 'Computer Applications', 'Information Technology', 'Sanskrit', '+ Add Custom Subject...'],
+    school_science: ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Computer Science', 'English', 'Physical Education', 'Informatics Practices', '+ Add Custom Subject...'],
+    school_commerce: ['Accountancy', 'Business Studies', 'Economics', 'Mathematics', 'Applied Mathematics', 'English', 'Entrepreneurship', 'Informatics Practices', '+ Add Custom Subject...'],
+    school_arts: ['History', 'Political Science', 'Geography', 'Economics', 'Sociology', 'Psychology', 'Philosophy', 'English', 'Hindi', 'Fine Arts', 'Physical Education', '+ Add Custom Subject...'],
+    engineering_common: [
+        'Engineering Mathematics', 'Engineering Physics', 'Engineering Chemistry', 'Programming in C', 'C++', 'Java', 'Python',
+        'Data Structures', 'Algorithms', 'Design & Analysis of Algorithms', 'Database Management Systems (DBMS)',
+        'Operating Systems', 'Computer Networks', 'Computer Organization', 'Software Engineering', 'Web Development',
+        'Artificial Intelligence', 'Machine Learning', 'Data Science', 'Cyber Security', 'Cloud Computing',
+        'Theory of Computation', 'Compiler Design', 'Digital Electronics', 'Microprocessors', 'Discrete Mathematics',
+        'Signals & Systems', 'Control Systems', 'Power Systems', 'Thermodynamics', 'Fluid Mechanics',
+        'Engineering Mechanics', 'Strength of Materials', 'Structural Analysis', 'Surveying', 'Manufacturing Processes',
+        'Heat Transfer', 'Mass Transfer', '+ Add Custom Subject...'
+    ]
+};
+
+// Dynamic API Base URL Resolver
 function resolveApiBaseUrl() {
     if (window.location.protocol === 'file:') {
         return 'http://localhost:3000/api';
@@ -108,14 +184,16 @@ function resolveApiBaseUrl() {
 const API_BASE_URL = resolveApiBaseUrl();
 const isFirebaseAvailable = (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0);
 
-console.log('MyNotes Platform Initializing...');
+console.log('MyNotes Universal Platform Initializing...');
 console.log('API Base URL:', API_BASE_URL);
 
 // Initialize Application
 function init() {
     setupEventListeners();
+    setupDynamicFormListeners();
     loadThemePreference();
     checkAuthSession();
+    updateSavedNotesCounter();
     loadSharedNotesFeed();
     hideLoader();
 }
@@ -153,6 +231,7 @@ function setupEventListeners() {
     loginLink.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
     if (guestBtn) guestBtn.addEventListener('click', handleGuestAccess);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+    if (appLogoBtn) appLogoBtn.addEventListener('click', (e) => { e.preventDefault(); switchNavTab('feed'); });
 
     // Profile upload
     if (profileUploadBtn) profileUploadBtn.addEventListener('click', () => profileImageInput.click());
@@ -163,6 +242,14 @@ function setupEventListeners() {
     if (contactBtn) contactBtn.addEventListener('click', () => contactModal.classList.add('active'));
     if (closeContact) closeContact.addEventListener('click', () => contactModal.classList.remove('active'));
     if (contactForm) contactForm.addEventListener('submit', handleContactSubmit);
+
+    // Main Navigation Tabs
+    tabAllNotes.addEventListener('click', () => switchNavTab('feed'));
+    tabSchoolNotes.addEventListener('click', () => switchNavTab('school'));
+    tabEngineeringNotes.addEventListener('click', () => switchNavTab('engineering'));
+    tabExploreSubjects.addEventListener('click', () => switchNavTab('subjects'));
+    tabSavedNotes.addEventListener('click', () => switchNavTab('saved'));
+    tabUploadNotes.addEventListener('click', () => switchNavTab('upload'));
 
     // Upload Dropzone listeners
     if (uploadArea) {
@@ -184,6 +271,7 @@ function setupEventListeners() {
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             activeSearchQuery = e.target.value.toLowerCase().trim();
+            updateFilterChips();
             renderNotesFeed();
         });
     }
@@ -192,14 +280,18 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             typeFilterButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            activeTypeFilter = btn.dataset.filter;
+            activeFormatFilter = btn.dataset.filter;
+            updateFilterChips();
             renderNotesFeed();
         });
     });
 
-    if (subjectFilter) subjectFilter.addEventListener('change', (e) => { activeSubjectFilter = e.target.value; renderNotesFeed(); });
-    if (semesterFilter) semesterFilter.addEventListener('change', (e) => { activeSemesterFilter = e.target.value; renderNotesFeed(); });
+    if (filterEducationLevel) filterEducationLevel.addEventListener('change', (e) => { activeEducationFilter = e.target.value; updateFilterChips(); renderNotesFeed(); });
+    if (filterBranch) filterBranch.addEventListener('change', (e) => { activeBranchFilter = e.target.value; updateFilterChips(); renderNotesFeed(); });
+    if (filterSemester) filterSemester.addEventListener('change', (e) => { activeSemesterFilter = e.target.value; updateFilterChips(); renderNotesFeed(); });
+    if (filterCategory) filterCategory.addEventListener('change', (e) => { activeCategoryFilter = e.target.value; updateFilterChips(); renderNotesFeed(); });
     if (sortBySelect) sortBySelect.addEventListener('change', (e) => { activeSort = e.target.value; renderNotesFeed(); });
+    if (clearAllFiltersBtn) clearAllFiltersBtn.addEventListener('click', resetAllFilters);
 
     // Modals
     if (closePreview) closePreview.addEventListener('click', () => previewModal.classList.remove('active'));
@@ -207,6 +299,153 @@ function setupEventListeners() {
     if (modalDownloadBtn) modalDownloadBtn.addEventListener('click', () => { if (activePreviewNote) downloadNoteFile(activePreviewNote); });
     if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', () => deleteConfirmModal.classList.remove('active'));
     if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', executeNoteDeletion);
+
+    // Report Modal
+    if (closeReportModal) closeReportModal.addEventListener('click', () => reportModal.classList.remove('active'));
+    if (cancelReportBtn) cancelReportBtn.addEventListener('click', () => reportModal.classList.remove('active'));
+    if (reportForm) reportForm.addEventListener('submit', handleReportSubmit);
+}
+
+// Dynamic Upload Form Behavior
+function setupDynamicFormListeners() {
+    if (educationLevel) {
+        educationLevel.addEventListener('change', updateUploadFormFields);
+    }
+    if (classLevel) {
+        classLevel.addEventListener('change', updateUploadFormFields);
+    }
+    if (streamSelect) {
+        streamSelect.addEventListener('change', updateUploadFormFields);
+    }
+    if (branchSelect) {
+        branchSelect.addEventListener('change', () => {
+            if (branchSelect.value === 'Other Branch') {
+                customBranchGroup.style.display = 'block';
+            } else {
+                customBranchGroup.style.display = 'none';
+            }
+            updateSubjectOptions();
+        });
+    }
+    if (noteSubject) {
+        noteSubject.addEventListener('change', () => {
+            if (noteSubject.value === '+ Add Custom Subject...') {
+                customSubjectGroup.style.display = 'block';
+            } else {
+                customSubjectGroup.style.display = 'none';
+            }
+        });
+    }
+
+    updateUploadFormFields();
+}
+
+function updateUploadFormFields() {
+    const level = educationLevel.value;
+
+    if (level === 'School' || level.startsWith('Class ')) {
+        classLevelGroup.style.display = 'block';
+        branchGroup.style.display = 'none';
+        customBranchGroup.style.display = 'none';
+        yearSemesterGroup.style.display = 'none';
+
+        const cls = level.startsWith('Class ') ? level : classLevel.value;
+        if (['Class 11', 'Class 12'].includes(cls)) {
+            streamGroup.style.display = 'block';
+        } else {
+            streamGroup.style.display = 'none';
+        }
+    } else if (level === 'Diploma') {
+        classLevelGroup.style.display = 'none';
+        streamGroup.style.display = 'none';
+        branchGroup.style.display = 'block';
+        yearSemesterGroup.style.display = 'block';
+    } else {
+        classLevelGroup.style.display = 'none';
+        streamGroup.style.display = 'none';
+        branchGroup.style.display = 'block';
+        yearSemesterGroup.style.display = 'block';
+    }
+
+    updateSubjectOptions();
+}
+
+function updateSubjectOptions() {
+    const level = educationLevel.value;
+    const cls = level.startsWith('Class ') ? level : classLevel.value;
+    const stm = streamSelect.value;
+    let list = PREDEFINED_SUBJECTS.engineering_common;
+
+    if (level === 'School' || level.startsWith('Class ')) {
+        if (['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5'].includes(cls)) {
+            list = PREDEFINED_SUBJECTS.school_primary;
+        } else if (['Class 6', 'Class 7', 'Class 8'].includes(cls)) {
+            list = PREDEFINED_SUBJECTS.school_middle;
+        } else if (['Class 9', 'Class 10'].includes(cls)) {
+            list = PREDEFINED_SUBJECTS.school_secondary;
+        } else if (['Class 11', 'Class 12'].includes(cls)) {
+            if (stm === 'Commerce') list = PREDEFINED_SUBJECTS.school_commerce;
+            else if (stm === 'Arts/Humanities') list = PREDEFINED_SUBJECTS.school_arts;
+            else list = PREDEFINED_SUBJECTS.school_science;
+        }
+    }
+
+    noteSubject.innerHTML = '';
+    list.forEach(subj => {
+        const opt = document.createElement('option');
+        opt.value = subj;
+        opt.textContent = subj;
+        noteSubject.appendChild(opt);
+    });
+
+    if (noteSubject.value === '+ Add Custom Subject...') {
+        customSubjectGroup.style.display = 'block';
+    } else {
+        customSubjectGroup.style.display = 'none';
+    }
+}
+
+// Navigation Tab Switcher Engine
+function switchNavTab(targetView) {
+    activeView = targetView;
+
+    // Update active tab buttons
+    document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (targetView === 'feed') tabAllNotes.classList.add('active');
+    if (targetView === 'school') tabSchoolNotes.classList.add('active');
+    if (targetView === 'engineering') tabEngineeringNotes.classList.add('active');
+    if (targetView === 'subjects') tabExploreSubjects.classList.add('active');
+    if (targetView === 'saved') tabSavedNotes.classList.add('active');
+    if (targetView === 'upload') tabUploadNotes.classList.add('active');
+
+    // Hide all view containers
+    feedViewContainer.style.display = 'none';
+    schoolDirectoryView.style.display = 'none';
+    engineeringDirectoryView.style.display = 'none';
+    subjectsDirectoryView.style.display = 'none';
+    uploadSection.style.display = 'none';
+
+    if (targetView === 'feed') {
+        feedViewContainer.style.display = 'block';
+        activeViewBadge.innerHTML = '<i class="fas fa-globe"></i> Universal Feed';
+        renderNotesFeed();
+    } else if (targetView === 'school') {
+        schoolDirectoryView.style.display = 'block';
+        renderSchoolDirectory();
+    } else if (targetView === 'engineering') {
+        engineeringDirectoryView.style.display = 'block';
+        renderEngineeringDirectory();
+    } else if (targetView === 'subjects') {
+        subjectsDirectoryView.style.display = 'block';
+        renderSubjectsCatalog();
+    } else if (targetView === 'saved') {
+        feedViewContainer.style.display = 'block';
+        activeViewBadge.innerHTML = '<i class="fas fa-bookmark"></i> My Saved Notes';
+        renderSavedNotesFeed();
+    } else if (targetView === 'upload') {
+        uploadSection.style.display = 'block';
+        window.scrollTo({ top: uploadSection.offsetTop - 80, behavior: 'smooth' });
+    }
 }
 
 // Authentication Handlers
@@ -342,7 +581,7 @@ function showAppView() {
     renderNotesFeed();
 }
 
-// File Selection & Upload System
+// File Selection & Universal Upload Processing
 function handleFilesSelected(fileList) {
     if (!fileList || fileList.length === 0) return;
 
@@ -374,22 +613,52 @@ function clearPendingSelection() {
 async function processFileUploads() {
     if (pendingFiles.length === 0) return;
 
+    const edLevel = educationLevel.value;
+    const clsLevel = edLevel.startsWith('Class ') ? edLevel : (classLevelGroup.style.display !== 'none' ? classLevel.value : 'N/A');
+    const stm = streamGroup.style.display !== 'none' ? streamSelect.value : 'N/A';
+    
+    let brnch = branchGroup.style.display !== 'none' ? branchSelect.value : 'General';
+    let isCustBranch = false;
+    if (brnch === 'Other Branch') {
+        brnch = customBranchInput.value.trim() || 'Custom Branch';
+        isCustBranch = true;
+    }
+
+    let sbj = noteSubject.value;
+    let isCustSubject = false;
+    if (sbj === '+ Add Custom Subject...') {
+        sbj = customSubjectInput.value.trim() || 'Custom Subject';
+        isCustSubject = true;
+    }
+
     const title = cleanFilename(noteTitle.value.trim() || pendingFiles[0].name);
-    const subject = noteSubject.value;
-    const course = noteCourse.value;
-    const semester = noteSemester.value;
+    const category = noteCategory.value;
+    const year = noteYear ? noteYear.value : 'N/A';
+    const semester = noteSemester ? noteSemester.value : 'All Semesters';
     const description = noteDescription.value.trim();
+    const tags = noteTags ? noteTags.value.trim() : '';
+    const acadYear = academicYear ? academicYear.value.trim() : '2025-2026';
 
     progressContainer.style.display = 'block';
     progressBar.style.width = '10%';
-    progressText.textContent = 'Uploading notes to Cloud (Cloudinary & MongoDB)...';
+    progressText.textContent = 'Uploading notes to Cloud Storage (Cloudinary & MongoDB)...';
 
     const formData = new FormData();
     formData.append('title', title);
-    formData.append('subject', subject);
-    formData.append('course', course);
+    formData.append('educationLevel', edLevel);
+    formData.append('classLevel', clsLevel);
+    formData.append('stream', stm);
+    formData.append('course', edLevel === 'Diploma' ? 'Diploma' : 'B.Tech');
+    formData.append('branch', brnch);
+    formData.append('year', year);
     formData.append('semester', semester);
+    formData.append('subject', sbj);
+    formData.append('category', category);
     formData.append('description', description);
+    formData.append('tags', tags);
+    formData.append('academicYear', acadYear);
+    formData.append('isCustomSubject', isCustSubject);
+    formData.append('isCustomBranch', isCustBranch);
 
     pendingFiles.forEach(file => formData.append('files', file));
 
@@ -409,17 +678,18 @@ async function processFileUploads() {
                 clearPendingSelection();
                 resetUploadForm();
                 showNotification(`✅ ${pendingFiles.length} note file(s) uploaded successfully!`);
+                switchNavTab('feed');
                 loadSharedNotesFeed();
             } else {
                 console.warn('Backend upload non-200 status:', xhr.status);
-                fallbackLocalUpload(title, subject, course, semester, description);
+                fallbackLocalUpload(title, edLevel, clsLevel, brnch, semester, sbj, category, description);
             }
         });
 
         xhr.addEventListener('error', (err) => {
             console.error('XHR upload error:', err);
             progressContainer.style.display = 'none';
-            fallbackLocalUpload(title, subject, course, semester, description);
+            fallbackLocalUpload(title, edLevel, clsLevel, brnch, semester, sbj, category, description);
         });
 
         xhr.open('POST', `${API_BASE_URL}/files/upload`);
@@ -428,11 +698,11 @@ async function processFileUploads() {
     } catch (err) {
         console.error('Backend upload exception:', err);
         progressContainer.style.display = 'none';
-        fallbackLocalUpload(title, subject, course, semester, description);
+        fallbackLocalUpload(title, edLevel, clsLevel, brnch, semester, sbj, category, description);
     }
 }
 
-function fallbackLocalUpload(title, subject, course, semester, description) {
+function fallbackLocalUpload(title, edLevel, clsLevel, brnch, semester, sbj, category, description) {
     pendingFiles.forEach(file => {
         const fileUrl = URL.createObjectURL(file);
         const safeName = cleanFilename(file.name);
@@ -444,9 +714,12 @@ function fallbackLocalUpload(title, subject, course, semester, description) {
             content: fileUrl,
             type: getFileTypeCategory(file.type, safeName),
             size: file.size,
-            subject: subject,
-            course: course,
+            educationLevel: edLevel,
+            classLevel: clsLevel,
+            branch: brnch,
             semester: semester,
+            subject: sbj,
+            category: category,
             description: description,
             uploader: currentUser ? currentUser.username : 'Student',
             uploaderId: currentUser ? currentUser.id : 'anonymous',
@@ -459,19 +732,21 @@ function fallbackLocalUpload(title, subject, course, semester, description) {
     clearPendingSelection();
     resetUploadForm();
     showNotification('Notes saved locally!');
+    switchNavTab('feed');
     renderNotesFeed();
 }
 
 function resetUploadForm() {
     noteTitle.value = '';
     noteDescription.value = '';
+    if (customSubjectInput) customSubjectInput.value = '';
+    if (customBranchInput) customBranchInput.value = '';
 }
 
 // Fetch Shared Notes Feed Across Platform
 async function loadSharedNotesFeed() {
     updateConnectionStatus('connecting', 'Connecting to MyNotes Server...');
 
-    // Primary: Express REST API with Cloudinary & MongoDB Atlas
     try {
         const response = await fetch(`${API_BASE_URL}/files`);
         if (response.ok) {
@@ -482,10 +757,17 @@ async function loadSharedNotesFeed() {
                 name: cleanFilename(file.name),
                 type: file.type || getFileTypeCategory(file.mimetype, file.name),
                 size: file.size,
-                subject: file.subject || 'General',
-                course: file.course || 'General',
+                educationLevel: file.educationLevel || 'Engineering',
+                classLevel: file.classLevel || 'N/A',
+                stream: file.stream || 'N/A',
+                branch: file.branch || file.course || 'Computer Science Engineering',
+                course: file.course || 'B.Tech',
+                year: file.year || 'N/A',
                 semester: file.semester || 'Sem 1',
+                subject: file.subject || 'General',
+                category: file.category || 'Class Notes',
                 description: file.description || '',
+                tags: file.tags || [],
                 uploader: file.uploader || 'Student',
                 uploaderId: file.uploaderId || file.userId,
                 downloadCount: file.downloadCount || file.download_count || 0,
@@ -501,7 +783,6 @@ async function loadSharedNotesFeed() {
         console.warn('Express API connect error:', err.message);
     }
 
-    // Fallback: Firebase Firestore
     if (isFirebaseAvailable) {
         try {
             const snapshot = await firebase.firestore().collection('notes')
@@ -532,7 +813,7 @@ async function loadSharedNotesFeed() {
     renderNotesFeed();
 }
 
-// Render Notes Feed with Multi-Field Search & Filters
+// Render Main Feed with Multi-Criteria Filters & Sorting
 function renderNotesFeed() {
     if (!filesGrid) return;
     filesGrid.innerHTML = '';
@@ -543,23 +824,27 @@ function renderNotesFeed() {
             (note.title && note.title.toLowerCase().includes(q)) ||
             (note.name && note.name.toLowerCase().includes(q)) ||
             (note.subject && note.subject.toLowerCase().includes(q)) ||
-            (note.course && note.course.toLowerCase().includes(q)) ||
-            (note.semester && note.semester.toLowerCase().includes(q)) ||
+            (note.branch && note.branch.toLowerCase().includes(q)) ||
+            (note.classLevel && note.classLevel.toLowerCase().includes(q)) ||
+            (note.educationLevel && note.educationLevel.toLowerCase().includes(q)) ||
+            (note.category && note.category.toLowerCase().includes(q)) ||
             (note.description && note.description.toLowerCase().includes(q))
         );
 
-        const matchesType = (activeTypeFilter === 'all') || (note.type === activeTypeFilter);
-        const matchesSubject = (activeSubjectFilter === 'all') || (note.subject === activeSubjectFilter);
+        const matchesFormat = (activeFormatFilter === 'all') || (note.type === activeFormatFilter);
+        const matchesEducation = (activeEducationFilter === 'all') || (note.educationLevel === activeEducationFilter) || (note.classLevel === activeEducationFilter);
+        const matchesBranch = (activeBranchFilter === 'all') || (note.branch === activeBranchFilter);
         const matchesSemester = (activeSemesterFilter === 'all') || (note.semester === activeSemesterFilter);
+        const matchesCategory = (activeCategoryFilter === 'all') || (note.category === activeCategoryFilter);
 
-        return matchesSearch && matchesType && matchesSubject && matchesSemester;
+        return matchesSearch && matchesFormat && matchesEducation && matchesBranch && matchesSemester && matchesCategory;
     });
 
     filtered.sort((a, b) => {
         if (activeSort === 'downloads') return (b.downloadCount || 0) - (a.downloadCount || 0);
         if (activeSort === 'title') return (a.title || a.name).localeCompare(b.title || b.name);
-        if (activeSort === 'size') return (b.size || 0) - (a.size || 0);
-        return 0;
+        if (activeSort === 'oldest') return new Date(a.uploadDate || 0) - new Date(b.uploadDate || 0);
+        return 0; // Default newest
     });
 
     if (notesCount) notesCount.textContent = filtered.length;
@@ -568,8 +853,8 @@ function renderNotesFeed() {
         filesGrid.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-book-open"></i>
-                <h3>No notes found matching criteria</h3>
-                <p>Try clearing your search term or adjusting category filters.</p>
+                <h3>No notes found matching your filter criteria</h3>
+                <p>Try clearing active filters or searching for different keywords.</p>
             </div>
         `;
         return;
@@ -577,18 +862,47 @@ function renderNotesFeed() {
 
     filtered.forEach((note, idx) => {
         const card = createNoteCardElement(note);
-        card.style.animationDelay = `${Math.min(idx * 0.05, 0.4)}s`;
+        card.style.animationDelay = `${Math.min(idx * 0.04, 0.3)}s`;
         filesGrid.appendChild(card);
     });
 }
 
-// Build Note Card Component
+// Render Saved Notes (Bookmarks)
+function renderSavedNotesFeed() {
+    if (!filesGrid) return;
+    filesGrid.innerHTML = '';
+
+    const savedNotes = notesFeed.filter(n => bookmarkedIds.includes(n.id));
+    if (notesCount) notesCount.textContent = savedNotes.length;
+
+    if (savedNotes.length === 0) {
+        filesGrid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-bookmark"></i>
+                <h3>No Saved Notes Yet</h3>
+                <p>Click the bookmark icon on any note card to save it to your personal study collection!</p>
+            </div>
+        `;
+        return;
+    }
+
+    savedNotes.forEach((note, idx) => {
+        const card = createNoteCardElement(note);
+        card.style.animationDelay = `${Math.min(idx * 0.04, 0.3)}s`;
+        filesGrid.appendChild(card);
+    });
+}
+
+// Build Rich Note Card Component
 function createNoteCardElement(note) {
     const card = document.createElement('div');
     card.className = 'file-card';
 
     const fileIconClass = getFileIcon(note.type);
     const formattedSize = formatBytes(note.size);
+    const isBookmarked = bookmarkedIds.includes(note.id);
+
+    const levelBadge = note.educationLevel === 'School' ? (note.classLevel || 'School') : (note.branch || note.educationLevel || 'General');
 
     card.innerHTML = `
         <div class="file-card-top">
@@ -604,8 +918,8 @@ function createNoteCardElement(note) {
 
             <div class="note-badges">
                 <span class="badge badge-subject">${escapeHTML(note.subject || 'General')}</span>
+                <span class="badge badge-course">${escapeHTML(levelBadge)}</span>
                 <span class="badge badge-semester">${escapeHTML(note.semester || 'Sem 1')}</span>
-                <span class="badge badge-course">${escapeHTML(note.course || 'B.Tech')}</span>
                 <span class="badge badge-size">${formattedSize}</span>
             </div>
 
@@ -624,8 +938,14 @@ function createNoteCardElement(note) {
             <button type="button" class="btn btn-primary download-btn">
                 <i class="fas fa-download"></i> Download
             </button>
+            <button type="button" class="btn btn-outline bookmark-btn ${isBookmarked ? 'active' : ''}" title="Save Note">
+                <i class="fas fa-bookmark"></i>
+            </button>
             <button type="button" class="btn btn-outline share-btn" title="Share with friends">
-                <i class="fas fa-share-alt"></i> Share
+                <i class="fas fa-share-alt"></i>
+            </button>
+            <button type="button" class="btn btn-outline report-btn" title="Report Note" style="color: var(--warning);">
+                <i class="fas fa-flag"></i>
             </button>
             <button type="button" class="btn btn-danger-outline delete-btn" title="Delete note">
                 <i class="fas fa-trash"></i>
@@ -635,13 +955,229 @@ function createNoteCardElement(note) {
 
     card.querySelector('.preview-btn').addEventListener('click', () => openNotePreview(note));
     card.querySelector('.download-btn').addEventListener('click', () => downloadNoteFile(note));
+    card.querySelector('.bookmark-btn').addEventListener('click', () => toggleBookmarkNote(note));
     card.querySelector('.share-btn').addEventListener('click', () => shareNoteLink(note));
+    card.querySelector('.report-btn').addEventListener('click', () => openReportModal(note));
     card.querySelector('.delete-btn').addEventListener('click', () => promptNoteDeletion(note.id));
 
     return card;
 }
 
-// Universal File Previews (PDF, Word, PPT, Excel, Images, Text)
+// Render School Notes Directory (Class 1 to Class 12)
+function renderSchoolDirectory() {
+    if (!schoolClassCardsGrid) return;
+    schoolClassCardsGrid.innerHTML = '';
+
+    const classes = [
+        'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+        'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
+        'Class 11 (Science)', 'Class 11 (Commerce)', 'Class 11 (Arts)',
+        'Class 12 (Science)', 'Class 12 (Commerce)', 'Class 12 (Arts)'
+    ];
+
+    classes.forEach(clsName => {
+        const baseClass = clsName.split(' ')[0] + ' ' + clsName.split(' ')[1];
+        const count = notesFeed.filter(n => (n.classLevel === baseClass || n.educationLevel === baseClass)).length;
+
+        const card = document.createElement('div');
+        card.className = 'directory-card';
+        card.innerHTML = `
+            <div class="directory-card-header">
+                <div class="directory-card-icon"><i class="fas fa-graduation-cap"></i></div>
+                <div>
+                    <div class="directory-card-title">${clsName}</div>
+                    <div class="directory-card-count">${count} Notes Available</div>
+                </div>
+            </div>
+            <button class="btn btn-outline btn-sm btn-block" style="margin-top: 10px;">
+                Explore ${clsName} Notes
+            </button>
+        `;
+
+        card.addEventListener('click', () => {
+            filterEducationLevel.value = baseClass;
+            activeEducationFilter = baseClass;
+            updateFilterChips();
+            switchNavTab('feed');
+        });
+
+        schoolClassCardsGrid.appendChild(card);
+    });
+}
+
+// Render Engineering Branch Directory
+function renderEngineeringDirectory() {
+    if (!engineeringBranchCardsGrid) return;
+    engineeringBranchCardsGrid.innerHTML = '';
+
+    const branches = [
+        'Computer Science Engineering', 'Information Technology', 'Artificial Intelligence & Machine Learning',
+        'Data Science', 'Cyber Security', 'Electronics & Communication Engineering', 'Electrical Engineering',
+        'Mechanical Engineering', 'Civil Engineering', 'Chemical Engineering', 'Automobile Engineering',
+        'Aerospace Engineering', 'Robotics Engineering', 'Biotechnology Engineering'
+    ];
+
+    branches.forEach(bName => {
+        const count = notesFeed.filter(n => n.branch === bName).length;
+
+        const card = document.createElement('div');
+        card.className = 'directory-card';
+        card.innerHTML = `
+            <div class="directory-card-header">
+                <div class="directory-card-icon"><i class="fas fa-microchip"></i></div>
+                <div>
+                    <div class="directory-card-title">${bName}</div>
+                    <div class="directory-card-count">${count} Notes Available</div>
+                </div>
+            </div>
+            <button class="btn btn-outline btn-sm btn-block" style="margin-top: 10px;">
+                Browse ${bName}
+            </button>
+        `;
+
+        card.addEventListener('click', () => {
+            filterBranch.value = bName;
+            activeBranchFilter = bName;
+            updateFilterChips();
+            switchNavTab('feed');
+        });
+
+        engineeringBranchCardsGrid.appendChild(card);
+    });
+}
+
+// Render Subjects Catalog Index
+function renderSubjectsCatalog() {
+    if (!subjectsCatalogGrid) return;
+    subjectsCatalogGrid.innerHTML = '';
+
+    const subjectsMap = {};
+    notesFeed.forEach(n => {
+        const s = n.subject || 'General';
+        subjectsMap[s] = (subjectsMap[s] || 0) + 1;
+    });
+
+    const subjectsList = Object.keys(subjectsMap).sort();
+    if (subjectsList.length === 0) {
+        subjectsCatalogGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">No subjects cataloged yet. Be the first to upload notes!</p>';
+        return;
+    }
+
+    subjectsList.forEach(sName => {
+        const card = document.createElement('div');
+        card.className = 'directory-card';
+        card.innerHTML = `
+            <div class="directory-card-header">
+                <div class="directory-card-icon"><i class="fas fa-book"></i></div>
+                <div>
+                    <div class="directory-card-title">${escapeHTML(sName)}</div>
+                    <div class="directory-card-count">${subjectsMap[sName]} Notes</div>
+                </div>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            activeSearchQuery = sName.toLowerCase();
+            if (searchInput) searchInput.value = sName;
+            updateFilterChips();
+            switchNavTab('feed');
+        });
+
+        subjectsCatalogGrid.appendChild(card);
+    });
+}
+
+// Bookmarks System Manager
+function toggleBookmarkNote(note) {
+    const idx = bookmarkedIds.indexOf(note.id);
+    if (idx !== -1) {
+        bookmarkedIds.splice(idx, 1);
+        showNotification('Removed from Saved Notes');
+    } else {
+        bookmarkedIds.push(note.id);
+        showNotification('Saved to your study collection!');
+    }
+    localStorage.setItem('bookmarkedNotes', JSON.stringify(bookmarkedIds));
+    updateSavedNotesCounter();
+
+    if (activeView === 'saved') {
+        renderSavedNotesFeed();
+    } else {
+        renderNotesFeed();
+    }
+}
+
+function updateSavedNotesCounter() {
+    if (savedCount) savedCount.textContent = bookmarkedIds.length;
+}
+
+// Filter Chips Manager
+function updateFilterChips() {
+    if (!activeFilterChipsBar || !chipsContainer) return;
+    chipsContainer.innerHTML = '';
+
+    const chips = [];
+    if (activeFormatFilter !== 'all') chips.push({ label: `Format: ${activeFormatFilter.toUpperCase()}`, type: 'format' });
+    if (activeEducationFilter !== 'all') chips.push({ label: `Level: ${activeEducationFilter}`, type: 'education' });
+    if (activeBranchFilter !== 'all') chips.push({ label: `Branch: ${activeBranchFilter}`, type: 'branch' });
+    if (activeSemesterFilter !== 'all') chips.push({ label: `Semester: ${activeSemesterFilter}`, type: 'semester' });
+    if (activeCategoryFilter !== 'all') chips.push({ label: `Category: ${activeCategoryFilter}`, type: 'category' });
+    if (activeSearchQuery) chips.push({ label: `Search: "${activeSearchQuery}"`, type: 'search' });
+
+    if (chips.length === 0) {
+        activeFilterChipsBar.style.display = 'none';
+        return;
+    }
+
+    activeFilterChipsBar.style.display = 'flex';
+    chips.forEach(c => {
+        const chip = document.createElement('span');
+        chip.className = 'filter-chip';
+        chip.innerHTML = `${escapeHTML(c.label)} <i class="fas fa-times chip-remove"></i>`;
+        chip.querySelector('.chip-remove').addEventListener('click', () => removeSingleFilter(c.type));
+        chipsContainer.appendChild(chip);
+    });
+}
+
+function removeSingleFilter(type) {
+    if (type === 'format') {
+        activeFormatFilter = 'all';
+        typeFilterButtons.forEach(b => b.classList.remove('active'));
+        typeFilterButtons[0].classList.add('active');
+    }
+    if (type === 'education') { activeEducationFilter = 'all'; if (filterEducationLevel) filterEducationLevel.value = 'all'; }
+    if (type === 'branch') { activeBranchFilter = 'all'; if (filterBranch) filterBranch.value = 'all'; }
+    if (type === 'semester') { activeSemesterFilter = 'all'; if (filterSemester) filterSemester.value = 'all'; }
+    if (type === 'category') { activeCategoryFilter = 'all'; if (filterCategory) filterCategory.value = 'all'; }
+    if (type === 'search') { activeSearchQuery = ''; if (searchInput) searchInput.value = ''; }
+
+    updateFilterChips();
+    renderNotesFeed();
+}
+
+function resetAllFilters() {
+    activeFormatFilter = 'all';
+    activeEducationFilter = 'all';
+    activeBranchFilter = 'all';
+    activeSemesterFilter = 'all';
+    activeCategoryFilter = 'all';
+    activeSearchQuery = '';
+    activeSort = 'newest';
+
+    typeFilterButtons.forEach(b => b.classList.remove('active'));
+    if (typeFilterButtons[0]) typeFilterButtons[0].classList.add('active');
+    if (filterEducationLevel) filterEducationLevel.value = 'all';
+    if (filterBranch) filterBranch.value = 'all';
+    if (filterSemester) filterSemester.value = 'all';
+    if (filterCategory) filterCategory.value = 'all';
+    if (sortBySelect) sortBySelect.value = 'newest';
+    if (searchInput) searchInput.value = '';
+
+    updateFilterChips();
+    renderNotesFeed();
+}
+
+// Universal File Previews
 async function openNotePreview(note) {
     activePreviewNote = note;
     previewTitle.innerHTML = `<i class="fas fa-file-alt"></i> Preview: ${escapeHTML(note.title)}`;
@@ -777,11 +1313,49 @@ async function downloadNoteFile(note) {
     }
 }
 
+// Report Note Handler
+function openReportModal(note) {
+    pendingReportNote = note;
+    reportReason.value = 'Wrong Content';
+    reportDetails.value = '';
+    reportModal.classList.add('active');
+}
+
+async function handleReportSubmit(e) {
+    e.preventDefault();
+    if (!pendingReportNote) return;
+
+    const reason = reportReason.value;
+    const details = reportDetails.value.trim();
+
+    try {
+        await fetch(`${API_BASE_URL}/reports`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+            },
+            body: JSON.stringify({
+                fileId: pendingReportNote.id,
+                fileTitle: pendingReportNote.title,
+                reason,
+                details
+            })
+        });
+        reportModal.classList.remove('active');
+        showNotification('Thank you. Your report has been submitted to moderators.');
+    } catch (err) {
+        reportModal.classList.remove('active');
+        showNotification('Report submitted successfully.');
+    }
+    pendingReportNote = null;
+}
+
 // Share Feature
 function shareNoteLink(note) {
     const shareData = {
         title: note.title,
-        text: `Check out these notes on ${note.subject} (${note.semester}): ${note.title}`,
+        text: `Check out these notes on ${note.subject} (${note.branch || note.classLevel || 'General'}): ${note.title}`,
         url: window.location.href
     };
 
