@@ -155,6 +155,9 @@
                     </div>
 
                     <div class="header-actions">
+                        <button class="btn btn-primary" id="headerUploadBtn" title="Upload Notes & Study Material">
+                            <i class="fas fa-cloud-upload-alt"></i> <span class="hide-mobile">Upload Notes</span>
+                        </button>
                         <button class="btn btn-outline" id="contactBtn" title="Support & Feedback">
                             <i class="fas fa-envelope"></i> <span class="hide-mobile">Contact</span>
                         </button>
@@ -199,8 +202,8 @@
                 </button>
             </nav>
 
-            <!-- Dynamic Upload Section -->
-            <section class="upload-section glass-card" id="uploadSection">
+            <!-- Dynamic Upload Section (Hidden by default, shown on upload view switch) -->
+            <section class="upload-section glass-card" id="uploadSection" style="display: none;">
                 <div class="section-title">
                     <i class="fas fa-cloud-upload-alt"></i>
                     <h3>Upload Notes & Academic Study Material</h3>

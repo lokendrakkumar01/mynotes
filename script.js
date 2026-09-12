@@ -335,6 +335,9 @@ function setupEventListeners() {
         }
     });
 
+    const headerUploadBtn = document.getElementById('headerUploadBtn');
+    if (headerUploadBtn) headerUploadBtn.addEventListener('click', () => switchNavTab('upload'));
+
     if (guestBtn) guestBtn.addEventListener('click', handleGuestAccess);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
     if (appLogoBtn) appLogoBtn.addEventListener('click', (e) => { e.preventDefault(); switchNavTab('feed'); });
@@ -359,7 +362,7 @@ function setupEventListeners() {
     if (tabSavedNotes) tabSavedNotes.addEventListener('click', () => switchNavTab('saved'));
     if (tabAdminPortal) tabAdminPortal.addEventListener('click', () => switchNavTab('admin'));
     if (tabUploadNotes) tabUploadNotes.addEventListener('click', () => switchNavTab('upload'));
-
+}
     // Upload Dropzone listeners
     if (uploadArea) {
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -1438,7 +1441,7 @@ async function openNotePreview(note) {
 
     // 2. PDF Document Preview
     if (note.type === 'pdf') {
-        // Try fetching PDF blob for native blob URL rendering
+        let pdfTargetUrl = viewUrl;
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -1447,37 +1450,55 @@ async function openNotePreview(note) {
 
             if (res.ok) {
                 const blob = await res.blob();
-                if (blob.size > 0 && (blob.type.includes('pdf') || blob.type.includes('octet-stream'))) {
+                if (blob.size > 0) {
                     const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-                    const blobUrl = URL.createObjectURL(pdfBlob);
-                    previewContainer.innerHTML = '';
-
-                    const objectTag = document.createElement('object');
-                    objectTag.data = blobUrl;
-                    objectTag.type = 'application/pdf';
-                    objectTag.style.width = '100%';
-                    objectTag.style.height = '540px';
-                    objectTag.style.borderRadius = '8px';
-                    objectTag.innerHTML = `<iframe src="${blobUrl}" style="width:100%; height:540px; border:none; border-radius:8px;"></iframe>`;
-                    
-                    previewContainer.appendChild(objectTag);
-                    return;
+                    pdfTargetUrl = URL.createObjectURL(pdfBlob);
                 }
             }
         } catch (e) {
-            console.warn('PDF blob preview fetch error or timeout:', e.message);
+            console.warn('PDF blob fetch warning:', e.message);
         }
 
-        // Direct Native Backend Stream Embed Fallback
         previewContainer.innerHTML = '';
-        const objectTag = document.createElement('object');
-        objectTag.data = viewUrl;
-        objectTag.type = 'application/pdf';
-        objectTag.style.width = '100%';
-        objectTag.style.height = '540px';
-        objectTag.style.borderRadius = '8px';
-        objectTag.innerHTML = `<iframe src="${viewUrl}" style="width:100%; height:540px; border:none; border-radius:8px;"></iframe>`;
-        previewContainer.appendChild(objectTag);
+
+        const pdfCard = document.createElement('div');
+        pdfCard.style.display = 'flex';
+        pdfCard.style.flexDirection = 'column';
+        pdfCard.style.gap = '10px';
+
+        const iframe = document.createElement('iframe');
+        iframe.src = pdfTargetUrl;
+        iframe.style.width = '100%';
+        iframe.style.height = '520px';
+        iframe.style.border = 'none';
+        iframe.style.borderRadius = '8px';
+        pdfCard.appendChild(iframe);
+
+        const pdfFooter = document.createElement('div');
+        pdfFooter.className = 'glass-card';
+        pdfFooter.style.padding = '10px 16px';
+        pdfFooter.style.display = 'flex';
+        pdfFooter.style.justifyContent = 'space-between';
+        pdfFooter.style.alignItems = 'center';
+        pdfFooter.style.flexWrap = 'wrap';
+        pdfFooter.style.gap = '10px';
+        pdfFooter.innerHTML = `
+            <div style="font-size: 13px; color: var(--text-secondary);">
+                <i class="fas fa-file-pdf" style="color: var(--danger);"></i> <strong>${escapeHTML(note.title)}</strong> (.PDF Document)
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <a href="${viewUrl}" target="_blank" class="btn btn-outline btn-sm">
+                    <i class="fas fa-external-link-alt"></i> Open PDF in New Window
+                </a>
+                <button type="button" class="btn btn-primary btn-sm" id="modalFooterPdfDownloadBtn">
+                    <i class="fas fa-download"></i> Download PDF
+                </button>
+            </div>
+        `;
+        pdfFooter.querySelector('#modalFooterPdfDownloadBtn').addEventListener('click', () => downloadNoteFile(note));
+        pdfCard.appendChild(pdfFooter);
+
+        previewContainer.appendChild(pdfCard);
         return;
     }
 
