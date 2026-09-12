@@ -59,8 +59,9 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Case-Insensitive Admin Route Rewriter: /admin or /Admin -> serves index.html
 app.use((req, res, next) => {
-    const lowerUrl = req.url.toLowerCase();
-    if (lowerUrl === '/admin' || lowerUrl.startsWith('/admin/') || lowerUrl.startsWith('/admin?')) {
+    const lowerPath = req.path.toLowerCase();
+    const ext = path.extname(req.path);
+    if (!ext && (lowerPath === '/admin' || lowerPath.startsWith('/admin/'))) {
         return res.sendFile(path.join(__dirname, 'index.html'));
     }
     next();
