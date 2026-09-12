@@ -362,7 +362,7 @@ function setupEventListeners() {
     if (tabSavedNotes) tabSavedNotes.addEventListener('click', () => switchNavTab('saved'));
     if (tabAdminPortal) tabAdminPortal.addEventListener('click', () => switchNavTab('admin'));
     if (tabUploadNotes) tabUploadNotes.addEventListener('click', () => switchNavTab('upload'));
-}
+
     // Upload Dropzone listeners
     if (uploadArea) {
         uploadArea.addEventListener('click', () => fileInput.click());

@@ -20,9 +20,9 @@ const NEWS_API_KEY = process.env.NEWS_API_KEY || '';
 
 // Configure Cloudinary API
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'kt2upmou',
-    api_key: process.env.CLOUDINARY_API_KEY || '972468326573411',
-    api_secret: process.env.CLOUDINARY_API_SECRET || 'XMNZ8Ft0fkuQ06tgvv9b8zR33fs'
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'o75xc285',
+    api_key: process.env.CLOUDINARY_API_KEY || '785966873647383',
+    api_secret: process.env.CLOUDINARY_API_SECRET || 'vaPvQvMpjW7tO1C0tuRQzq3_8mI'
 });
 
 // Ensure local uploads folder exists
