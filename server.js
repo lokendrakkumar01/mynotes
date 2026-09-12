@@ -16,6 +16,7 @@ const { db } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'mynotes-secret-key-student-sharing';
+const NEWS_API_KEY = process.env.NEWS_API_KEY || '';
 
 // Configure Cloudinary API
 cloudinary.config({
@@ -56,6 +57,15 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(__dirname));
 app.use('/uploads', express.static(uploadsDir));
 
+// Case-Insensitive Admin Route Rewriter: /admin or /Admin -> serves index.html
+app.use((req, res, next) => {
+    const lowerUrl = req.url.toLowerCase();
+    if (lowerUrl === '/admin' || lowerUrl.startsWith('/admin/') || lowerUrl.startsWith('/admin?')) {
+        return res.sendFile(path.join(__dirname, 'index.html'));
+    }
+    next();
+});
+
 // Multer Storage Configuration
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -84,11 +94,22 @@ function authenticateToken(req, res, next) {
         return next();
     }
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, JWT_SECRET, async (err, decoded) => {
         if (err) {
             req.user = null;
         } else {
-            req.user = user;
+            // Fetch live user record to verify active status & current role
+            const user = await db.getUserById(decoded.id);
+            if (user && user.status !== 'suspended') {
+                req.user = {
+                    id: user.id || user._id,
+                    username: user.username,
+                    email: user.email,
+                    role: user.role || 'user'
+                };
+            } else {
+                req.user = null;
+            }
         }
         next();
     });
@@ -97,7 +118,18 @@ function authenticateToken(req, res, next) {
 // Strict Auth Middleware for Protected Actions
 function requireAuth(req, res, next) {
     if (!req.user) {
-        return res.status(401).json({ message: 'Authentication required' });
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    next();
+}
+
+// Strict Role-Based Access Control (RBAC) Admin Middleware
+function requireAdmin(req, res, next) {
+    if (!req.user) {
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Access denied: Admin privileges required' });
     }
     next();
 }
@@ -153,7 +185,7 @@ app.get('/health', async (req, res) => {
     const dbStatus = await db.testConnection();
     res.json({
         status: 'ok',
-        message: 'MyNotes Universal Platform Server is running with MongoDB Atlas & Cloudinary',
+        message: 'MyNotes Universal Platform Server is running with MongoDB Atlas, Cloudinary & News Engine',
         database: dbStatus ? 'connected' : 'local_json',
         ip: getServerIP(),
         port: PORT
@@ -166,42 +198,44 @@ app.post('/api/auth/register', async (req, res) => {
         const { username, email, password, profileImage } = req.body;
 
         if (!username || !email || !password) {
-            return res.status(400).json({ message: 'Username, email, and password are required' });
+            return res.status(400).json({ success: false, message: 'Username, email, and password are required' });
         }
 
         const existingUsername = await db.getUserByUsername(username);
         if (existingUsername) {
-            return res.status(400).json({ message: 'Username already taken' });
+            return res.status(400).json({ success: false, message: 'Username already taken' });
         }
 
         const existingEmail = await db.getUserByEmail(email);
         if (existingEmail) {
-            return res.status(400).json({ message: 'Email address already registered' });
+            return res.status(400).json({ success: false, message: 'Email address already registered' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = Date.now().toString();
-        const newUser = await db.createUser(userId, username, email, hashedPassword, profileImage);
+        const newUser = await db.createUser(userId, username, email, hashedPassword, profileImage, 'user');
 
         const token = jwt.sign(
-            { id: newUser.id, username: newUser.username },
+            { id: newUser.id, username: newUser.username, role: newUser.role },
             JWT_SECRET,
             { expiresIn: '30d' }
         );
 
         res.status(201).json({
+            success: true,
             message: 'Registration successful',
             token,
             user: {
                 id: newUser.id,
                 username: newUser.username,
                 email: newUser.email,
+                role: newUser.role,
                 profileImage: newUser.profile_image || newUser.profileImage
             }
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ message: 'Server error during registration' });
+        res.status(500).json({ success: false, message: 'Server error during registration' });
     }
 });
 
@@ -210,39 +244,54 @@ app.post('/api/auth/login', async (req, res) => {
         const { username, password } = req.body;
 
         if (!username || !password) {
-            return res.status(400).json({ message: 'Username and password are required' });
+            return res.status(400).json({ success: false, message: 'Username/email and password are required' });
         }
 
-        const user = await db.getUserByUsername(username);
+        // Allow login with either username OR email
+        let user = await db.getUserByUsername(username);
         if (!user) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+            user = await db.getUserByEmail(username);
+        }
+
+        if (!user) {
+            return res.status(401).json({ success: false, message: 'Invalid username/email or password' });
+        }
+
+        if (user.status === 'suspended') {
+            return res.status(403).json({ success: false, message: 'Account is suspended. Please contact admin.' });
         }
 
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({ success: false, message: 'Invalid username/email or password' });
         }
 
         const token = jwt.sign(
-            { id: user.id || user._id, username: user.username },
+            { id: user.id || user._id, username: user.username, role: user.role || 'user' },
             JWT_SECRET,
             { expiresIn: '30d' }
         );
 
         res.json({
+            success: true,
             message: 'Login successful',
             token,
             user: {
                 id: user.id || user._id,
                 username: user.username,
                 email: user.email,
+                role: user.role || 'user',
                 profileImage: user.profile_image || user.profileImage
             }
         });
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ message: 'Server error during login' });
+        res.status(500).json({ success: false, message: 'Server error during login' });
     }
+});
+
+app.get('/api/auth/me', authenticateToken, requireAuth, (req, res) => {
+    res.json({ success: true, user: req.user });
 });
 
 // GET Shared Notes with Multi-Criteria Advanced Filtering & Search
@@ -262,18 +311,18 @@ app.get('/api/files', authenticateToken, async (req, res) => {
         };
 
         const files = await db.getPublicFiles(filters);
-        res.json({ files, count: files.length });
+        res.json({ success: true, files, count: files.length });
     } catch (error) {
         console.error('Fetch shared notes error:', error);
-        res.status(500).json({ message: 'Error fetching shared notes' });
+        res.status(500).json({ success: false, message: 'Error fetching shared notes' });
     }
 });
 
-// Upload Notes with Full Academic Metadata (School, Diploma, Engineering 35+ Branches)
+// Upload Notes with Full Academic Metadata
 app.post('/api/files/upload', authenticateToken, upload.array('files', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ message: 'No files were selected for upload' });
+            return res.status(400).json({ success: false, message: 'No files were selected for upload' });
         }
 
         const title = req.body.title || '';
@@ -296,19 +345,9 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
         const uploaderName = req.user ? req.user.username : 'Student';
         const uploaderEmail = req.user ? (req.user.email || '') : '';
 
-        // If custom subject or branch supplied, log into taxonomy catalog
-        if (isCustomSubject && subject) {
-            await db.addCustomTaxonomy('subject', subject, category, uploaderId);
-        }
-        if (isCustomBranch && branch) {
-            await db.addCustomTaxonomy('branch', branch, educationLevel, uploaderId);
-        }
-
         const uploadedFiles = [];
         for (const file of req.files) {
             const fileType = getFileType(file.mimetype, file.originalname);
-            
-            // Upload to Cloudinary for permanent hosting on Render
             const cloudRes = await uploadToCloudinary(file.path, file.originalname);
             
             const fileData = {
@@ -349,30 +388,29 @@ app.post('/api/files/upload', authenticateToken, upload.array('files', 10), asyn
         }
 
         res.status(201).json({
+            success: true,
             message: 'Notes uploaded successfully!',
             files: uploadedFiles
         });
     } catch (error) {
         console.error('Upload notes error:', error);
-        res.status(500).json({ message: 'Failed to upload notes: ' + error.message });
+        res.status(500).json({ success: false, message: 'Failed to upload notes: ' + error.message });
     }
 });
 
-// File Download Endpoint (Tracks Download Counter & Handles Local or Cloudinary Files)
+// File Download Endpoint
 app.get('/api/files/:id/download', async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
 
         if (!file) {
-            return res.status(404).json({ message: 'Note file not found' });
+            return res.status(404).json({ success: false, message: 'Note file not found' });
         }
 
-        // Increment download counter in MongoDB Atlas / Local DB
         await db.incrementDownloadCount(req.params.id);
 
         const originalName = file.name || file.title || 'note_document';
 
-        // Stream from Cloudinary if hosted remotely
         if (file.url && (file.url.startsWith('http://') || file.url.startsWith('https://'))) {
             const client = file.url.startsWith('https://') ? https : http;
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalName)}"`);
@@ -381,32 +419,101 @@ app.get('/api/files/:id/download', async (req, res) => {
             return client.get(file.url, (stream) => {
                 stream.pipe(res);
             }).on('error', (err) => {
-                console.error('Cloudinary download stream error:', err);
                 res.redirect(file.url);
             });
         }
 
-        // Local storage fallback
         const filenameOnDisk = file.filename || path.basename(file.path || '');
         const filePath = path.join(uploadsDir, filenameOnDisk);
 
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'Note file not found on server storage' });
+            return res.status(404).json({ success: false, message: 'Note file not found on server storage' });
         }
 
         res.download(filePath, originalName);
     } catch (error) {
         console.error('Download error:', error);
-        res.status(500).json({ message: 'Error initiating file download' });
+        res.status(500).json({ success: false, message: 'Error initiating file download' });
     }
 });
 
-// Report Note API Endpoint
+// Articles Public & Admin APIs
+app.get('/api/articles', async (req, res) => {
+    try {
+        const articles = await db.getArticles('PUBLISHED');
+        res.json({ success: true, articles });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching articles' });
+    }
+});
+
+app.get('/api/articles/:slug', async (req, res) => {
+    try {
+        const article = await db.getArticleBySlug(req.params.slug);
+        if (!article) return res.status(404).json({ success: false, message: 'Article not found' });
+        res.json({ success: true, article });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching article' });
+    }
+});
+
+// Current Affairs & Daily News Engine API (Server-side fetch & Cache)
+app.get('/api/current-affairs', async (req, res) => {
+    try {
+        let newsItems = await db.getNewsItems();
+
+        // Seed initial news items if database is empty
+        if (!newsItems || newsItems.length === 0) {
+            const initialNews = [
+                {
+                    title: 'GATE 2026 Official Syllabus & Exam Pattern Announced for All Engineering Streams',
+                    summary: 'IIT organises GATE 2026 with revised exam paper structure for CS, ECE, EE, Civil and Mechanical streams.',
+                    category: 'Education',
+                    source: 'National Academic News',
+                    examRelevance: ['GATE', 'UPSC'],
+                    isFeatured: true
+                },
+                {
+                    title: 'UPSC Engineering Services & Civil Services Exam Registration Guidelines Updated',
+                    summary: 'Union Public Service Commission updates candidate profile verification rules and subject choice formats.',
+                    category: 'Government',
+                    source: 'UPSC Portal',
+                    examRelevance: ['UPSC', 'SSC'],
+                    isFeatured: true
+                },
+                {
+                    title: 'AI & Data Science Curriculum Standardized Across Technical Universities',
+                    summary: 'New industry-aligned AI/ML core modules introduced for 3rd and 4th-year engineering undergraduates.',
+                    category: 'Technology',
+                    source: 'Tech Higher Ed',
+                    examRelevance: ['GATE', 'Banking'],
+                    isFeatured: false
+                }
+            ];
+            newsItems = await db.saveNewsItems(initialNews);
+        }
+
+        res.json({ success: true, news: newsItems });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching current affairs' });
+    }
+});
+
+app.get('/api/news', async (req, res) => {
+    try {
+        const newsItems = await db.getNewsItems();
+        res.json({ success: true, news: newsItems });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching news' });
+    }
+});
+
+// Report Note Endpoint
 app.post('/api/reports', authenticateToken, async (req, res) => {
     try {
         const { fileId, fileTitle, reason, details } = req.body;
         if (!fileId || !reason) {
-            return res.status(400).json({ message: 'fileId and reason are required' });
+            return res.status(400).json({ success: false, message: 'fileId and reason are required' });
         }
 
         const report = await db.createReport({
@@ -418,51 +525,36 @@ app.post('/api/reports', authenticateToken, async (req, res) => {
             details: details || ''
         });
 
-        res.status(201).json({ message: 'Report submitted successfully', report });
+        res.status(201).json({ success: true, message: 'Report submitted successfully', report });
     } catch (error) {
-        console.error('Report note error:', error);
-        res.status(500).json({ message: 'Error submitting report' });
+        res.status(500).json({ success: false, message: 'Error submitting report' });
     }
 });
 
-// Custom Taxonomy API Endpoint (Get Custom Subjects & Branches)
-app.get('/api/taxonomy', async (req, res) => {
-    try {
-        const list = await db.getCustomTaxonomies();
-        res.json({ taxonomy: list });
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching taxonomy' });
-    }
-});
-
-// Delete Note (Protected)
+// Delete Note
 app.delete('/api/files/:id', authenticateToken, requireAuth, async (req, res) => {
     try {
         const file = await db.getFileById(req.params.id);
 
         if (!file) {
-            return res.status(404).json({ message: 'Note not found' });
+            return res.status(404).json({ success: false, message: 'Note not found' });
         }
 
-        const isOwner = (file.uploaderId === req.user.id || file.userId === req.user.id || req.user.username === 'admin');
+        const isOwner = (file.uploaderId === req.user.id || req.user.role === 'admin');
         if (!isOwner) {
-            return res.status(403).json({ message: 'You are not authorized to delete this note' });
+            return res.status(403).json({ success: false, message: 'You are not authorized to delete this note' });
         }
 
         const deletedFile = await db.deleteFile(req.params.id, req.user.id);
 
         if (deletedFile) {
-            // Delete from Cloudinary if present
             if (deletedFile.cloudinaryId) {
                 try {
                     await cloudinary.uploader.destroy(deletedFile.cloudinaryId, { resource_type: 'raw' });
                     await cloudinary.uploader.destroy(deletedFile.cloudinaryId, { resource_type: 'image' });
-                } catch (cErr) {
-                    console.warn('Cloudinary delete warning:', cErr.message);
-                }
+                } catch (cErr) {}
             }
 
-            // Delete local file if present
             const filenameOnDisk = deletedFile.filename || path.basename(deletedFile.path || '');
             const filePath = path.join(uploadsDir, filenameOnDisk);
             if (fs.existsSync(filePath)) {
@@ -470,10 +562,127 @@ app.delete('/api/files/:id', authenticateToken, requireAuth, async (req, res) =>
             }
         }
 
-        res.json({ message: 'Note deleted successfully' });
+        res.json({ success: true, message: 'Note deleted successfully' });
     } catch (error) {
-        console.error('Delete error:', error);
-        res.status(500).json({ message: 'Error deleting note' });
+        res.status(500).json({ success: false, message: 'Error deleting note' });
+    }
+});
+
+// ==========================================
+// STRICT ADMIN PROTECTED APIS (/api/admin/*)
+// ==========================================
+
+app.get('/api/admin/dashboard', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const stats = await db.getAdminDashboardStats();
+        res.json({ success: true, stats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching admin dashboard stats' });
+    }
+});
+
+app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const users = await db.getAllUsers();
+        res.json({ success: true, users });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching users list' });
+    }
+});
+
+app.put('/api/admin/users/:id/role', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { role } = req.body;
+        if (!['user', 'admin'].includes(role)) {
+            return res.status(400).json({ success: false, message: 'Invalid role' });
+        }
+        const updated = await db.updateUserRole(req.params.id, role);
+        res.json({ success: true, message: 'User role updated', user: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error updating user role' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        if (req.user.id === req.params.id) {
+            return res.status(400).json({ success: false, message: 'You cannot delete your own admin account' });
+        }
+        const deleted = await db.deleteUser(req.params.id);
+        res.json({ success: true, message: 'User deleted successfully', user: deleted });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error deleting user' });
+    }
+});
+
+app.get('/api/admin/notes', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const files = await db.getPublicFiles();
+        res.json({ success: true, files });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching admin notes' });
+    }
+});
+
+app.delete('/api/admin/notes/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const deletedFile = await db.deleteFile(req.params.id, 'admin');
+        if (deletedFile && deletedFile.cloudinaryId) {
+            try {
+                await cloudinary.uploader.destroy(deletedFile.cloudinaryId, { resource_type: 'raw' });
+                await cloudinary.uploader.destroy(deletedFile.cloudinaryId, { resource_type: 'image' });
+            } catch (e) {}
+        }
+        res.json({ success: true, message: 'Note deleted by admin' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error deleting note' });
+    }
+});
+
+app.get('/api/admin/articles', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const articles = await db.getArticles('ALL');
+        res.json({ success: true, articles });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching articles' });
+    }
+});
+
+app.post('/api/admin/articles', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { title, shortDescription, content, category, status } = req.body;
+        if (!title || !content) {
+            return res.status(400).json({ success: false, message: 'Title and content are required' });
+        }
+        const newArt = await db.createArticle({
+            title,
+            shortDescription: shortDescription || '',
+            content,
+            category: category || 'Education',
+            status: status || 'PUBLISHED',
+            author: req.user.username || 'Admin'
+        });
+        res.status(201).json({ success: true, message: 'Article created successfully', article: newArt });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error creating article' });
+    }
+});
+
+app.delete('/api/admin/articles/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const deleted = await db.deleteArticle(req.params.id);
+        res.json({ success: true, message: 'Article deleted', article: deleted });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error deleting article' });
+    }
+});
+
+app.get('/api/admin/reports', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const reports = await db.getReports();
+        res.json({ success: true, reports });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching reports' });
     }
 });
 
@@ -484,10 +693,11 @@ async function startServer() {
 
     app.listen(PORT, '0.0.0.0', () => {
         console.log('\n==================================================');
-        console.log('🚀 MYNOTES - UNIVERSAL ACADEMIC PLATFORM SERVER');
+        console.log('🚀 MYNOTES UNIVERSAL PLATFORM & ADMIN PORTAL');
         console.log('==================================================');
         console.log(`📍 Local access:   http://localhost:${PORT}`);
         console.log(`🌐 Network access: http://${serverIP}:${PORT}`);
+        console.log(`🛡️ Admin Portal:  http://localhost:${PORT}/Admin`);
         console.log('==================================================\n');
     });
 }

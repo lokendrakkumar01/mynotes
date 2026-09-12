@@ -40,7 +40,10 @@ const tabAllNotes = document.getElementById('tabAllNotes');
 const tabSchoolNotes = document.getElementById('tabSchoolNotes');
 const tabEngineeringNotes = document.getElementById('tabEngineeringNotes');
 const tabExploreSubjects = document.getElementById('tabExploreSubjects');
+const tabArticles = document.getElementById('tabArticles');
+const tabCurrentAffairs = document.getElementById('tabCurrentAffairs');
 const tabSavedNotes = document.getElementById('tabSavedNotes');
+const tabAdminPortal = document.getElementById('tabAdminPortal');
 const tabUploadNotes = document.getElementById('tabUploadNotes');
 const savedCount = document.getElementById('savedCount');
 
@@ -101,6 +104,48 @@ const engineeringDirectoryView = document.getElementById('engineeringDirectoryVi
 const engineeringBranchCardsGrid = document.getElementById('engineeringBranchCardsGrid');
 const subjectsDirectoryView = document.getElementById('subjectsDirectoryView');
 const subjectsCatalogGrid = document.getElementById('subjectsCatalogGrid');
+
+const articlesViewContainer = document.getElementById('articlesViewContainer');
+const articlesGrid = document.getElementById('articlesGrid');
+const articleSingleContainer = document.getElementById('articleSingleContainer');
+const createArticleBtn = document.getElementById('createArticleBtn');
+
+const currentAffairsViewContainer = document.getElementById('currentAffairsViewContainer');
+const newsGrid = document.getElementById('newsGrid');
+const newsCategoryFilter = document.getElementById('newsCategoryFilter');
+const refreshNewsBtn = document.getElementById('refreshNewsBtn');
+
+const adminLoginViewContainer = document.getElementById('adminLoginViewContainer');
+const adminLoginForm = document.getElementById('adminLoginForm');
+const adminUsernameInput = document.getElementById('adminUsername');
+const adminPasswordInput = document.getElementById('adminPassword');
+
+const adminDashboardViewContainer = document.getElementById('adminDashboardViewContainer');
+const refreshAdminStatsBtn = document.getElementById('refreshAdminStatsBtn');
+const statTotalUsers = document.getElementById('statTotalUsers');
+const statTotalNotes = document.getElementById('statTotalNotes');
+const statTotalDownloads = document.getElementById('statTotalDownloads');
+const statPendingReports = document.getElementById('statPendingReports');
+
+const adminSubTabUsers = document.getElementById('adminSubTabUsers');
+const adminSubTabNotes = document.getElementById('adminSubTabNotes');
+const adminSubTabReports = document.getElementById('adminSubTabReports');
+const adminSubTabArticles = document.getElementById('adminSubTabArticles');
+const adminSubTabNews = document.getElementById('adminSubTabNews');
+
+const adminPanelUsers = document.getElementById('adminPanelUsers');
+const adminPanelNotes = document.getElementById('adminPanelNotes');
+const adminPanelReports = document.getElementById('adminPanelReports');
+const adminPanelArticles = document.getElementById('adminPanelArticles');
+const adminPanelNews = document.getElementById('adminPanelNews');
+
+const adminUsersTableBody = document.getElementById('adminUsersTableBody');
+const adminNotesTableBody = document.getElementById('adminNotesTableBody');
+const adminReportsTableBody = document.getElementById('adminReportsTableBody');
+const adminArticleForm = document.getElementById('adminArticleForm');
+const adminArticlesList = document.getElementById('adminArticlesList');
+const adminNewsList = document.getElementById('adminNewsList');
+const adminSyncNewsBtn = document.getElementById('adminSyncNewsBtn');
 
 // Modals
 const previewModal = document.getElementById('previewModal');
@@ -195,6 +240,8 @@ function init() {
     checkAuthSession();
     updateSavedNotesCounter();
     loadSharedNotesFeed();
+    verifyUserSession();
+    handleInitialRoute();
     hideLoader();
 }
 
@@ -207,7 +254,7 @@ function hideLoader() {
     }, 450);
 }
 
-// Authentication Session Manager
+// Authentication & Role Session Manager
 function checkAuthSession() {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
@@ -218,10 +265,53 @@ function checkAuthSession() {
             showLoginView();
         }
     } else {
-        currentUser = { id: 'guest-' + Date.now(), username: 'Guest Student', email: 'student@mynotes.edu', isGuest: true };
+        currentUser = { id: 'guest-' + Date.now(), username: 'Guest Student', email: 'student@mynotes.edu', isGuest: true, role: 'user' };
         showAppView();
     }
+    updateRoleUI();
 }
+
+async function verifyUserSession() {
+    if (!authToken) return;
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            currentUser = data.user;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            updateRoleUI();
+        }
+    } catch (e) {
+        console.warn('Verify session warning:', e.message);
+    }
+}
+
+function updateRoleUI() {
+    if (currentUser && currentUser.role === 'admin') {
+        if (tabAdminPortal) tabAdminPortal.style.display = 'inline-flex';
+        if (createArticleBtn) createArticleBtn.style.display = 'inline-flex';
+    } else {
+        if (tabAdminPortal) tabAdminPortal.style.display = 'none';
+        if (createArticleBtn) createArticleBtn.style.display = 'none';
+    }
+}
+
+function handleInitialRoute() {
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('/admin/login')) {
+        switchNavTab('admin-login');
+    } else if (path.includes('/admin')) {
+        switchNavTab('admin');
+    } else if (path.includes('/articles')) {
+        switchNavTab('articles');
+    } else if (path.includes('/current-affairs')) {
+        switchNavTab('current-affairs');
+    }
+}
+
+window.addEventListener('popstate', handleInitialRoute);
 
 function setupEventListeners() {
     // Auth listeners
@@ -244,12 +334,15 @@ function setupEventListeners() {
     if (contactForm) contactForm.addEventListener('submit', handleContactSubmit);
 
     // Main Navigation Tabs
-    tabAllNotes.addEventListener('click', () => switchNavTab('feed'));
-    tabSchoolNotes.addEventListener('click', () => switchNavTab('school'));
-    tabEngineeringNotes.addEventListener('click', () => switchNavTab('engineering'));
-    tabExploreSubjects.addEventListener('click', () => switchNavTab('subjects'));
-    tabSavedNotes.addEventListener('click', () => switchNavTab('saved'));
-    tabUploadNotes.addEventListener('click', () => switchNavTab('upload'));
+    if (tabAllNotes) tabAllNotes.addEventListener('click', () => switchNavTab('feed'));
+    if (tabSchoolNotes) tabSchoolNotes.addEventListener('click', () => switchNavTab('school'));
+    if (tabEngineeringNotes) tabEngineeringNotes.addEventListener('click', () => switchNavTab('engineering'));
+    if (tabExploreSubjects) tabExploreSubjects.addEventListener('click', () => switchNavTab('subjects'));
+    if (tabArticles) tabArticles.addEventListener('click', () => switchNavTab('articles'));
+    if (tabCurrentAffairs) tabCurrentAffairs.addEventListener('click', () => switchNavTab('current-affairs'));
+    if (tabSavedNotes) tabSavedNotes.addEventListener('click', () => switchNavTab('saved'));
+    if (tabAdminPortal) tabAdminPortal.addEventListener('click', () => switchNavTab('admin'));
+    if (tabUploadNotes) tabUploadNotes.addEventListener('click', () => switchNavTab('upload'));
 
     // Upload Dropzone listeners
     if (uploadArea) {
@@ -304,6 +397,53 @@ function setupEventListeners() {
     if (closeReportModal) closeReportModal.addEventListener('click', () => reportModal.classList.remove('active'));
     if (cancelReportBtn) cancelReportBtn.addEventListener('click', () => reportModal.classList.remove('active'));
     if (reportForm) reportForm.addEventListener('submit', handleReportSubmit);
+
+    // Articles & Current Affairs
+    if (refreshNewsBtn) refreshNewsBtn.addEventListener('click', () => loadCurrentAffairs(newsCategoryFilter ? newsCategoryFilter.value : 'all'));
+    if (newsCategoryFilter) newsCategoryFilter.addEventListener('change', (e) => loadCurrentAffairs(e.target.value));
+
+    // Admin Portal Form & Sub-tabs
+    if (adminLoginForm) adminLoginForm.addEventListener('submit', handleAdminLogin);
+    if (refreshAdminStatsBtn) refreshAdminStatsBtn.addEventListener('click', loadAdminDashboard);
+    if (adminArticleForm) adminArticleForm.addEventListener('submit', handleCreateArticle);
+    if (adminSyncNewsBtn) adminSyncNewsBtn.addEventListener('click', handleSyncNews);
+
+    if (adminSubTabUsers) adminSubTabUsers.addEventListener('click', () => switchAdminPanel('users'));
+    if (adminSubTabNotes) adminSubTabNotes.addEventListener('click', () => switchAdminPanel('notes'));
+    if (adminSubTabReports) adminSubTabReports.addEventListener('click', () => switchAdminPanel('reports'));
+    if (adminSubTabArticles) adminSubTabArticles.addEventListener('click', () => switchAdminPanel('articles'));
+    if (adminSubTabNews) adminSubTabNews.addEventListener('click', () => switchAdminPanel('news'));
+}
+
+function switchAdminPanel(panelName) {
+    [adminSubTabUsers, adminSubTabNotes, adminSubTabReports, adminSubTabArticles, adminSubTabNews].forEach(btn => {
+        if (btn) btn.classList.remove('active');
+    });
+    [adminPanelUsers, adminPanelNotes, adminPanelReports, adminPanelArticles, adminPanelNews].forEach(p => {
+        if (p) p.style.display = 'none';
+    });
+
+    if (panelName === 'users') {
+        if (adminSubTabUsers) adminSubTabUsers.classList.add('active');
+        if (adminPanelUsers) adminPanelUsers.style.display = 'block';
+        loadAdminUsers();
+    } else if (panelName === 'notes') {
+        if (adminSubTabNotes) adminSubTabNotes.classList.add('active');
+        if (adminPanelNotes) adminPanelNotes.style.display = 'block';
+        loadAdminNotes();
+    } else if (panelName === 'reports') {
+        if (adminSubTabReports) adminSubTabReports.classList.add('active');
+        if (adminPanelReports) adminPanelReports.style.display = 'block';
+        loadAdminReports();
+    } else if (panelName === 'articles') {
+        if (adminSubTabArticles) adminSubTabArticles.classList.add('active');
+        if (adminPanelArticles) adminPanelArticles.style.display = 'block';
+        loadArticles();
+    } else if (panelName === 'news') {
+        if (adminSubTabNews) adminSubTabNews.classList.add('active');
+        if (adminPanelNews) adminPanelNews.style.display = 'block';
+        loadCurrentAffairs();
+    }
 }
 
 // Dynamic Upload Form Behavior
@@ -411,39 +551,61 @@ function switchNavTab(targetView) {
 
     // Update active tab buttons
     document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
-    if (targetView === 'feed') tabAllNotes.classList.add('active');
-    if (targetView === 'school') tabSchoolNotes.classList.add('active');
-    if (targetView === 'engineering') tabEngineeringNotes.classList.add('active');
-    if (targetView === 'subjects') tabExploreSubjects.classList.add('active');
-    if (targetView === 'saved') tabSavedNotes.classList.add('active');
-    if (targetView === 'upload') tabUploadNotes.classList.add('active');
+    if (targetView === 'feed' && tabAllNotes) tabAllNotes.classList.add('active');
+    if (targetView === 'school' && tabSchoolNotes) tabSchoolNotes.classList.add('active');
+    if (targetView === 'engineering' && tabEngineeringNotes) tabEngineeringNotes.classList.add('active');
+    if (targetView === 'subjects' && tabExploreSubjects) tabExploreSubjects.classList.add('active');
+    if (targetView === 'articles' && tabArticles) tabArticles.classList.add('active');
+    if (targetView === 'current-affairs' && tabCurrentAffairs) tabCurrentAffairs.classList.add('active');
+    if (targetView === 'saved' && tabSavedNotes) tabSavedNotes.classList.add('active');
+    if (targetView === 'admin' && tabAdminPortal) tabAdminPortal.classList.add('active');
+    if (targetView === 'upload' && tabUploadNotes) tabUploadNotes.classList.add('active');
 
     // Hide all view containers
-    feedViewContainer.style.display = 'none';
-    schoolDirectoryView.style.display = 'none';
-    engineeringDirectoryView.style.display = 'none';
-    subjectsDirectoryView.style.display = 'none';
-    uploadSection.style.display = 'none';
+    if (feedViewContainer) feedViewContainer.style.display = 'none';
+    if (schoolDirectoryView) schoolDirectoryView.style.display = 'none';
+    if (engineeringDirectoryView) engineeringDirectoryView.style.display = 'none';
+    if (subjectsDirectoryView) subjectsDirectoryView.style.display = 'none';
+    if (articlesViewContainer) articlesViewContainer.style.display = 'none';
+    if (currentAffairsViewContainer) currentAffairsViewContainer.style.display = 'none';
+    if (adminLoginViewContainer) adminLoginViewContainer.style.display = 'none';
+    if (adminDashboardViewContainer) adminDashboardViewContainer.style.display = 'none';
+    if (uploadSection) uploadSection.style.display = 'none';
 
     if (targetView === 'feed') {
-        feedViewContainer.style.display = 'block';
-        activeViewBadge.innerHTML = '<i class="fas fa-globe"></i> Universal Feed';
+        if (feedViewContainer) feedViewContainer.style.display = 'block';
+        if (activeViewBadge) activeViewBadge.innerHTML = '<i class="fas fa-globe"></i> Universal Feed';
         renderNotesFeed();
     } else if (targetView === 'school') {
-        schoolDirectoryView.style.display = 'block';
+        if (schoolDirectoryView) schoolDirectoryView.style.display = 'block';
         renderSchoolDirectory();
     } else if (targetView === 'engineering') {
-        engineeringDirectoryView.style.display = 'block';
+        if (engineeringDirectoryView) engineeringDirectoryView.style.display = 'block';
         renderEngineeringDirectory();
     } else if (targetView === 'subjects') {
-        subjectsDirectoryView.style.display = 'block';
+        if (subjectsDirectoryView) subjectsDirectoryView.style.display = 'block';
         renderSubjectsCatalog();
+    } else if (targetView === 'articles') {
+        if (articlesViewContainer) articlesViewContainer.style.display = 'block';
+        loadArticles();
+    } else if (targetView === 'current-affairs') {
+        if (currentAffairsViewContainer) currentAffairsViewContainer.style.display = 'block';
+        loadCurrentAffairs();
+    } else if (targetView === 'admin-login') {
+        if (adminLoginViewContainer) adminLoginViewContainer.style.display = 'block';
+    } else if (targetView === 'admin') {
+        if (!currentUser || currentUser.role !== 'admin') {
+            switchNavTab('admin-login');
+            return;
+        }
+        if (adminDashboardViewContainer) adminDashboardViewContainer.style.display = 'block';
+        loadAdminDashboard();
     } else if (targetView === 'saved') {
-        feedViewContainer.style.display = 'block';
-        activeViewBadge.innerHTML = '<i class="fas fa-bookmark"></i> My Saved Notes';
+        if (feedViewContainer) feedViewContainer.style.display = 'block';
+        if (activeViewBadge) activeViewBadge.innerHTML = '<i class="fas fa-bookmark"></i> My Saved Notes';
         renderSavedNotesFeed();
     } else if (targetView === 'upload') {
-        uploadSection.style.display = 'block';
+        if (uploadSection) uploadSection.style.display = 'block';
         window.scrollTo({ top: uploadSection.offsetTop - 80, behavior: 'smooth' });
     }
 }
@@ -1490,6 +1652,391 @@ function showNotification(msg, isError = false) {
 
     notification.classList.add('show');
     setTimeout(() => notification.classList.remove('show'), 3500);
+}
+
+// Articles & Blog Reader Engine
+async function loadArticles() {
+    if (!articlesGrid) return;
+    articlesGrid.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Loading educational articles & study guides...</p>';
+    if (articleSingleContainer) articleSingleContainer.style.display = 'none';
+    articlesGrid.style.display = 'grid';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/articles`);
+        const data = await response.json();
+        const articles = data.articles || [];
+
+        if (articles.length === 0) {
+            articlesGrid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <i class="fas fa-newspaper"></i>
+                    <h3>No articles published yet</h3>
+                    <p>Check back soon for exam guides, syllabus breakdowns, and study tips!</p>
+                </div>
+            `;
+            return;
+        }
+
+        articlesGrid.innerHTML = '';
+        articles.forEach(art => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '20px';
+            card.style.cursor = 'pointer';
+            card.innerHTML = `
+                <div style="font-size: 12px; color: var(--primary); font-weight: 600; margin-bottom: 8px;">${escapeHTML(art.category || 'Study Guide')}</div>
+                <h3 style="margin-bottom: 10px;">${escapeHTML(art.title)}</h3>
+                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">${escapeHTML(art.summary || '')}</p>
+                <div style="font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between;">
+                    <span><i class="fas fa-user"></i> ${escapeHTML(art.author || 'MyNotes Editorial')}</span>
+                    <span><i class="fas fa-clock"></i> ${new Date(art.createdAt).toLocaleDateString()}</span>
+                </div>
+            `;
+            card.addEventListener('click', () => renderSingleArticle(art));
+            articlesGrid.appendChild(card);
+        });
+    } catch (err) {
+        articlesGrid.innerHTML = '<p class="error">Failed to load articles.</p>';
+    }
+}
+
+function renderSingleArticle(art) {
+    if (!articleSingleContainer || !articlesGrid) return;
+    articlesGrid.style.display = 'none';
+    articleSingleContainer.style.display = 'block';
+    articleSingleContainer.innerHTML = `
+        <button class="btn btn-outline btn-sm" id="backToArticlesBtn" style="margin-bottom: 15px;">
+            <i class="fas fa-arrow-left"></i> Back to Articles
+        </button>
+        <div class="glass-card" style="padding: 24px;">
+            <span class="badge badge-course" style="margin-bottom: 10px; display: inline-block;">${escapeHTML(art.category)}</span>
+            <h2>${escapeHTML(art.title)}</h2>
+            <div style="font-size: 13px; color: var(--text-secondary); margin: 10px 0 20px 0;">
+                Published by <strong>${escapeHTML(art.author || 'Admin')}</strong> on ${new Date(art.createdAt).toLocaleDateString()}
+            </div>
+            <div class="article-content" style="line-height: 1.7; font-size: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                ${escapeHTML(art.content).replace(/\n/g, '<br>')}
+            </div>
+        </div>
+    `;
+    document.getElementById('backToArticlesBtn').addEventListener('click', () => {
+        articleSingleContainer.style.display = 'none';
+        articlesGrid.style.display = 'grid';
+    });
+}
+
+// Current Affairs & Daily Exam News Engine
+async function loadCurrentAffairs(category = 'all') {
+    if (!newsGrid) return;
+    newsGrid.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Fetching current affairs & daily exam news...</p>';
+
+    try {
+        const url = category === 'all' ? `${API_BASE_URL}/current-affairs` : `${API_BASE_URL}/current-affairs?category=${category}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        const newsList = data.news || [];
+
+        if (newsList.length === 0) {
+            newsGrid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1;">
+                    <i class="fas fa-globe-americas"></i>
+                    <h3>No current affairs news available</h3>
+                    <p>Click refresh or check back later.</p>
+                </div>
+            `;
+            return;
+        }
+
+        newsGrid.innerHTML = '';
+        newsList.forEach(news => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '18px';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+
+            const tags = news.examTags || ['UPSC', 'GATE'];
+            const tagsHTML = tags.map(t => `<span class="badge badge-subject" style="background: rgba(16, 185, 129, 0.1); color: #10b981; margin-right: 4px;">${escapeHTML(t)}</span>`).join('');
+
+            card.innerHTML = `
+                <div style="margin-bottom: 8px;">${tagsHTML}</div>
+                <h4 style="margin-bottom: 8px;"><a href="${escapeHTML(news.url)}" target="_blank" style="color: inherit; text-decoration: none;">${escapeHTML(news.title)}</a></h4>
+                <p style="font-size: 13px; color: var(--text-secondary); flex: 1; margin-bottom: 12px;">${escapeHTML(news.summary || '')}</p>
+                <div style="font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 8px;">
+                    <span>Source: ${escapeHTML(news.source || 'News')}</span>
+                    <span>${new Date(news.publishedAt).toLocaleDateString()}</span>
+                </div>
+            `;
+            newsGrid.appendChild(card);
+        });
+    } catch (err) {
+        newsGrid.innerHTML = '<p class="error">Failed to load current affairs news.</p>';
+    }
+}
+
+// Protected Admin Portal Handlers
+async function handleAdminLogin(e) {
+    e.preventDefault();
+    const username = adminUsernameInput.value.trim();
+    const password = adminPasswordInput.value;
+
+    if (!username || !password) {
+        showNotification('Please enter admin credentials', true);
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            if (data.user && data.user.role === 'admin') {
+                authToken = data.token;
+                currentUser = data.user;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                updateRoleUI();
+                switchNavTab('admin');
+                showNotification('Admin Authenticated Successfully');
+            } else {
+                showNotification('Access denied. Administrator privileges required.', true);
+            }
+        } else {
+            showNotification(data.message || 'Admin login failed', true);
+        }
+    } catch (err) {
+        showNotification('Connection error during admin login', true);
+    }
+}
+
+async function loadAdminDashboard() {
+    if (!authToken) return;
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/admin/dashboard`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+            const stats = await res.json();
+            if (statTotalUsers) statTotalUsers.textContent = stats.totalUsers || 0;
+            if (statTotalNotes) statTotalNotes.textContent = stats.totalNotes || 0;
+            if (statTotalDownloads) statTotalDownloads.textContent = stats.totalDownloads || 0;
+            if (statPendingReports) statPendingReports.textContent = stats.pendingReports || 0;
+        }
+    } catch (e) {}
+
+    loadAdminUsers();
+}
+
+async function loadAdminUsers() {
+    if (!adminUsersTableBody || !authToken) return;
+    adminUsersTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px;">Loading registered users...</td></tr>';
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/admin/users`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const users = data.users || [];
+
+        adminUsersTableBody.innerHTML = '';
+        users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+            tr.innerHTML = `
+                <td style="padding: 10px; font-weight: 600;">${escapeHTML(u.username)}</td>
+                <td style="padding: 10px;">${escapeHTML(u.email)}</td>
+                <td style="padding: 10px;"><span class="badge badge-course">${escapeHTML(u.role || 'user')}</span></td>
+                <td style="padding: 10px;">${escapeHTML(u.status || 'active')}</td>
+                <td style="padding: 10px;">
+                    <button class="btn btn-outline btn-sm toggle-role-btn" data-id="${u.id}">Toggle Role</button>
+                    <button class="btn btn-danger-outline btn-sm delete-user-btn" data-id="${u.id}">Delete</button>
+                </td>
+            `;
+            tr.querySelector('.toggle-role-btn').addEventListener('click', () => toggleUserRole(u.id, u.role === 'admin' ? 'user' : 'admin'));
+            tr.querySelector('.delete-user-btn').addEventListener('click', () => deleteAdminUser(u.id));
+            adminUsersTableBody.appendChild(tr);
+        });
+    } catch (e) {
+        adminUsersTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px; color: var(--danger);">Failed to load users.</td></tr>';
+    }
+}
+
+async function toggleUserRole(userId, newRole) {
+    try {
+        await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ role: newRole })
+        });
+        showNotification(`Role updated to ${newRole}`);
+        loadAdminUsers();
+    } catch (e) {
+        showNotification('Failed to update user role', true);
+    }
+}
+
+async function deleteAdminUser(userId) {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+    try {
+        await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        showNotification('User deleted');
+        loadAdminUsers();
+    } catch (e) {
+        showNotification('Failed to delete user', true);
+    }
+}
+
+async function loadAdminNotes() {
+    if (!adminNotesTableBody || !authToken) return;
+    adminNotesTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px;">Loading notes feed...</td></tr>';
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/admin/notes`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const notes = data.notes || [];
+
+        adminNotesTableBody.innerHTML = '';
+        notes.forEach(n => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+            tr.innerHTML = `
+                <td style="padding: 10px; font-weight: 600;">${escapeHTML(n.title)}</td>
+                <td style="padding: 10px;">${escapeHTML(n.uploader || 'Student')}</td>
+                <td style="padding: 10px;">${escapeHTML(n.branch || n.category || 'General')}</td>
+                <td style="padding: 10px;">${n.downloadCount || 0}</td>
+                <td style="padding: 10px;">
+                    <button class="btn btn-danger-outline btn-sm admin-delete-note-btn">Delete</button>
+                </td>
+            `;
+            tr.querySelector('.admin-delete-note-btn').addEventListener('click', async () => {
+                if (!confirm(`Delete note "${n.title}"?`)) return;
+                await fetch(`${API_BASE_URL}/admin/notes/${n.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                showNotification('Note deleted by Admin');
+                loadAdminNotes();
+            });
+            adminNotesTableBody.appendChild(tr);
+        });
+    } catch (e) {
+        adminNotesTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px;">Failed to load notes.</td></tr>';
+    }
+}
+
+async function loadAdminReports() {
+    if (!adminReportsTableBody || !authToken) return;
+    adminReportsTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px;">Loading content reports...</td></tr>';
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/admin/reports`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const reports = data.reports || [];
+
+        adminReportsTableBody.innerHTML = '';
+        if (reports.length === 0) {
+            adminReportsTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 15px;">No pending content reports.</td></tr>';
+            return;
+        }
+
+        reports.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+            tr.innerHTML = `
+                <td style="padding: 10px; font-weight: 600;">${escapeHTML(r.fileTitle || r.fileId)}</td>
+                <td style="padding: 10px;">${escapeHTML(r.reason)}</td>
+                <td style="padding: 10px;">${escapeHTML(r.details || '')}</td>
+                <td style="padding: 10px;"><span class="badge badge-subject">${escapeHTML(r.status)}</span></td>
+                <td style="padding: 10px; display: flex; gap: 6px;">
+                    <button class="btn btn-primary btn-sm resolve-report-btn">Resolve</button>
+                    <button class="btn btn-danger-outline btn-sm delete-reported-note-btn">Delete Note</button>
+                </td>
+            `;
+            tr.querySelector('.resolve-report-btn').addEventListener('click', async () => {
+                await fetch(`${API_BASE_URL}/admin/reports/${r.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ status: 'resolved' })
+                });
+                showNotification('Report marked as resolved');
+                loadAdminReports();
+            });
+            tr.querySelector('.delete-reported-note-btn').addEventListener('click', async () => {
+                if (!confirm('Delete reported file from platform?')) return;
+                await fetch(`${API_BASE_URL}/admin/notes/${r.fileId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                await fetch(`${API_BASE_URL}/admin/reports/${r.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                    body: JSON.stringify({ status: 'resolved' })
+                });
+                showNotification('Reported note deleted and report resolved');
+                loadAdminReports();
+            });
+            adminReportsTableBody.appendChild(tr);
+        });
+    } catch (e) {
+        adminReportsTableBody.innerHTML = '<tr><td colspan="5" style="padding: 10px;">Failed to load reports.</td></tr>';
+    }
+}
+
+async function handleCreateArticle(e) {
+    e.preventDefault();
+    const title = document.getElementById('articleTitleInput').value.trim();
+    const category = document.getElementById('articleCategoryInput').value.trim();
+    const summary = document.getElementById('articleSummaryInput').value.trim();
+    const content = document.getElementById('articleContentInput').value.trim();
+    const tags = document.getElementById('articleTagsInput').value.trim().split(',').map(t => t.trim()).filter(Boolean);
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/admin/articles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ title, category, summary, content, tags })
+        });
+        if (res.ok) {
+            showNotification('Article published successfully!');
+            adminArticleForm.reset();
+            loadArticles();
+        } else {
+            showNotification('Failed to publish article', true);
+        }
+    } catch (e) {
+        showNotification('Error publishing article', true);
+    }
+}
+
+async function handleSyncNews() {
+    if (!authToken) return;
+    try {
+        showNotification('Fetching and caching current affairs news...');
+        const res = await fetch(`${API_BASE_URL}/admin/news/fetch`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+            showNotification('News updated successfully!');
+            loadCurrentAffairs();
+        } else {
+            showNotification('Failed to sync news', true);
+        }
+    } catch (e) {
+        showNotification('Error syncing news', true);
+    }
 }
 
 function updateConnectionStatus(status, msg) {

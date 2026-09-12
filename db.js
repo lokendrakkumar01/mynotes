@@ -10,13 +10,15 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://versecolor7_db_user:u0TH6OZ82JaN2CjP@cluster0.eqrknzb.mongodb.net/mynotes?retryWrites=true&w=majority';
 let mongoConnected = false;
 
-// User Mongoose Schema
+// User Mongoose Schema with Role-Based Access Control
 const userSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true, index: true },
     email: { type: String, required: true, unique: true, index: true },
     password: { type: String, required: true },
     profileImage: { type: String, default: null },
+    role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
+    status: { type: String, enum: ['active', 'suspended'], default: 'active' },
     bookmarks: [{ type: String }],
     createdAt: { type: Date, default: Date.now }
 });
@@ -36,17 +38,17 @@ const fileSchema = new mongoose.Schema({
     mimetype: { type: String, default: 'application/octet-stream' },
     
     // Dynamic Academic Taxonomy Fields
-    educationLevel: { type: String, default: 'Engineering', index: true }, // School, Class 1-12, Diploma, Engineering, Postgraduate, Other
-    classLevel: { type: String, default: 'N/A', index: true },           // Class 1 to Class 12, N/A
-    stream: { type: String, default: 'N/A', index: true },               // Science, Commerce, Arts/Humanities, N/A
-    course: { type: String, default: 'B.Tech', index: true },             // B.Tech, B.E., Diploma, CBSE, ICSE, State Board, General
-    branch: { type: String, default: 'Computer Science Engineering', index: true }, // 35+ branches or Custom
-    year: { type: String, default: 'N/A' },                               // 1st Year, 2nd Year, 3rd Year, 4th Year
-    semester: { type: String, default: 'Sem 1', index: true },            // Sem 1 to Sem 8, All Semesters
-    subject: { type: String, default: 'General', index: true },           // Subject name
-    category: { type: String, default: 'Class Notes', index: true },       // Class Notes, Lecture Notes, Question Papers, etc.
+    educationLevel: { type: String, default: 'Engineering', index: true },
+    classLevel: { type: String, default: 'N/A', index: true },
+    stream: { type: String, default: 'N/A', index: true },
+    course: { type: String, default: 'B.Tech', index: true },
+    branch: { type: String, default: 'Computer Science Engineering', index: true },
+    year: { type: String, default: 'N/A' },
+    semester: { type: String, default: 'Sem 1', index: true },
+    subject: { type: String, default: 'General', index: true },
+    category: { type: String, default: 'Class Notes', index: true },
     description: { type: String, default: '' },
-    tags: [{ type: String }],                                            // Searchable tags
+    tags: [{ type: String }],
     academicYear: { type: String, default: '2025-2026' },
     isCustomSubject: { type: Boolean, default: false },
     isCustomBranch: { type: Boolean, default: false },
@@ -58,10 +60,45 @@ const fileSchema = new mongoose.Schema({
     uploadDate: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-// Compound Index for High Performance Multi-Criteria Queries
 fileSchema.index({ educationLevel: 1, classLevel: 1, branch: 1, semester: 1, subject: 1, category: 1, uploadDate: -1 });
 
 const FileModel = mongoose.models.File || mongoose.model('File', fileSchema);
+
+// Article / Blog Mongoose Schema
+const articleSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    title: { type: String, required: true },
+    slug: { type: String, required: true, unique: true, index: true },
+    shortDescription: { type: String, default: '' },
+    content: { type: String, required: true },
+    featuredImage: { type: String, default: '' },
+    author: { type: String, default: 'MyNotes Team' },
+    category: { type: String, default: 'Education' },
+    tags: [{ type: String }],
+    status: { type: String, enum: ['DRAFT', 'PUBLISHED', 'ARCHIVED'], default: 'PUBLISHED', index: true },
+    viewsCount: { type: Number, default: 0 },
+    publishedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+const ArticleModel = mongoose.models.Article || mongoose.model('Article', articleSchema);
+
+// Current Affairs & Daily News Mongoose Schema
+const newsSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    title: { type: String, required: true },
+    summary: { type: String, default: '' },
+    content: { type: String, default: '' },
+    url: { type: String, default: '' },
+    source: { type: String, default: 'Education News' },
+    imageUrl: { type: String, default: '' },
+    category: { type: String, default: 'General', index: true },
+    examRelevance: [{ type: String }], // e.g. ['UPSC', 'GATE', 'SSC', 'Banking']
+    isFeatured: { type: Boolean, default: false },
+    isHidden: { type: Boolean, default: false },
+    publishedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+const NewsModel = mongoose.models.News || mongoose.model('News', newsSchema);
 
 // Report Mongoose Schema
 const reportSchema = new mongoose.Schema({
@@ -78,9 +115,9 @@ const reportSchema = new mongoose.Schema({
 
 const ReportModel = mongoose.models.Report || mongoose.model('Report', reportSchema);
 
-// Dynamic Taxonomy Mongoose Schema (For Database-Driven Subjects & Branches)
+// Dynamic Taxonomy Mongoose Schema
 const taxonomySchema = new mongoose.Schema({
-    type: { type: String, required: true, index: true }, // 'branch', 'subject'
+    type: { type: String, required: true, index: true },
     name: { type: String, required: true },
     category: { type: String, default: 'General' },
     createdBy: { type: String, default: 'system' },
@@ -97,7 +134,7 @@ async function connectMongoDB() {
             serverSelectionTimeoutMS: 5000
         });
         mongoConnected = true;
-        console.log('✅ Connected to MongoDB Atlas (Universal Notes Schema Ready)');
+        console.log('✅ Connected to MongoDB Atlas (Enterprise Schemas & RBAC Active)');
         return true;
     } catch (err) {
         console.warn('⚠️ MongoDB Atlas connection error:', err.message);
@@ -141,7 +178,7 @@ if (isPgConfigured) {
 function readLocalData() {
     try {
         if (!fs.existsSync(DATA_FILE)) {
-            const initialData = { users: [], notes: [], files: [], reports: [], taxonomy: [] };
+            const initialData = { users: [], notes: [], files: [], reports: [], taxonomy: [], articles: [], news: [] };
             fs.writeFileSync(DATA_FILE, JSON.stringify(initialData, null, 2));
             return initialData;
         }
@@ -149,7 +186,7 @@ function readLocalData() {
         return JSON.parse(content);
     } catch (error) {
         console.error('Error reading data.json:', error.message);
-        return { users: [], notes: [], files: [], reports: [], taxonomy: [] };
+        return { users: [], notes: [], files: [], reports: [], taxonomy: [], articles: [], news: [] };
     }
 }
 
@@ -161,7 +198,7 @@ function writeLocalData(data) {
     }
 }
 
-// Unified Database API supporting MongoDB Atlas + Postgres + Local JSON Fallback
+// Unified Database API supporting MongoDB Atlas + Local JSON Fallback
 const db = {
     async testConnection() {
         if (!mongoConnected) {
@@ -171,23 +208,12 @@ const db = {
             console.log('✅ Database (MongoDB Atlas) active');
             return true;
         }
-        if (isPgConfigured && pool) {
-            try {
-                const res = await pool.query('SELECT NOW() as current_time');
-                pgConnected = true;
-                console.log('✅ Database (Postgres) connection verified:', res.rows[0].current_time);
-                return true;
-            } catch (err) {
-                console.warn('⚠️ Postgres connection failed:', err.message);
-                pgConnected = false;
-            }
-        }
         console.log('ℹ️ Using local JSON database (data.json)');
         return true;
     },
 
-    // User Operations
-    async createUser(id, username, email, hashedPassword, profileImage = null) {
+    // User Operations with Role-Based Access Control
+    async createUser(id, username, email, hashedPassword, profileImage = null, role = 'user') {
         if (!mongoConnected) await connectMongoDB();
         if (mongoConnected) {
             try {
@@ -197,6 +223,8 @@ const db = {
                     email,
                     password: hashedPassword,
                     profileImage: profileImage || null,
+                    role: role || 'user',
+                    status: 'active',
                     bookmarks: []
                 });
                 const saved = await newUser.save();
@@ -213,6 +241,8 @@ const db = {
             email,
             password: hashedPassword,
             profileImage: profileImage || null,
+            role: role || 'user',
+            status: 'active',
             bookmarks: [],
             createdAt: new Date().toISOString()
         };
@@ -266,7 +296,57 @@ const db = {
         return data.users.find(u => (u.id === id || u._id === id));
     },
 
-    // File / Universal Notes Operations
+    async getAllUsers() {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                return await User.find({}, '-password').sort({ createdAt: -1 }).lean();
+            } catch (err) {
+                console.error('MongoDB getAllUsers error:', err.message);
+            }
+        }
+        const data = readLocalData();
+        return data.users.map(({ password, ...user }) => user);
+    },
+
+    async updateUserRole(id, role) {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                return await User.findOneAndUpdate({ id }, { role }, { new: true }).select('-password').lean();
+            } catch (err) {
+                console.error('MongoDB updateUserRole error:', err.message);
+            }
+        }
+        const data = readLocalData();
+        const user = data.users.find(u => u.id === id || u._id === id);
+        if (user) {
+            user.role = role;
+            writeLocalData(data);
+        }
+        return user;
+    },
+
+    async deleteUser(id) {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                return await User.findOneAndDelete({ id }).lean();
+            } catch (err) {
+                console.error('MongoDB deleteUser error:', err.message);
+            }
+        }
+        const data = readLocalData();
+        const idx = data.users.findIndex(u => u.id === id || u._id === id);
+        if (idx !== -1) {
+            const [deleted] = data.users.splice(idx, 1);
+            writeLocalData(data);
+            return deleted;
+        }
+        return null;
+    },
+
+    // File / Notes Operations
     async createFile(fileData) {
         const id = fileData.id || (Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9));
         const createdAt = new Date();
@@ -322,7 +402,6 @@ const db = {
         return record;
     },
 
-    // Multi-Criteria Advanced Search & Filter Handler
     async getPublicFiles(filters = {}) {
         if (!mongoConnected) await connectMongoDB();
         if (mongoConnected) {
@@ -354,7 +433,6 @@ const db = {
                     query.type = filters.type;
                 }
 
-                // Text / Regex Search across Title, Description, Subject, Branch, Tags, Filename
                 if (filters.search) {
                     const searchRegex = new RegExp(filters.search.trim(), 'i');
                     query.$or = [
@@ -370,12 +448,10 @@ const db = {
                     ];
                 }
 
-                // Sorting logic
                 let sortOptions = { uploadDate: -1, createdAt: -1 };
                 if (filters.sort === 'oldest') sortOptions = { uploadDate: 1, createdAt: 1 };
                 if (filters.sort === 'downloads') sortOptions = { downloadCount: -1, uploadDate: -1 };
                 if (filters.sort === 'title') sortOptions = { title: 1 };
-                if (filters.sort === 'title_desc') sortOptions = { title: -1 };
 
                 const files = await FileModel.find(query).sort(sortOptions).lean();
                 return files;
@@ -387,7 +463,6 @@ const db = {
         const data = readLocalData();
         let filesList = data.files || [];
 
-        // Local array filtering logic
         if (filters.educationLevel && filters.educationLevel !== 'all') {
             filesList = filesList.filter(f => (f.educationLevel || 'Engineering') === filters.educationLevel);
         }
@@ -482,6 +557,148 @@ const db = {
         return null;
     },
 
+    // Article CRUD Operations
+    async createArticle(articleData) {
+        const id = articleData.id || ('art-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));
+        const slug = articleData.slug || articleData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        
+        const record = {
+            id,
+            title: articleData.title,
+            slug,
+            shortDescription: articleData.shortDescription || '',
+            content: articleData.content || '',
+            featuredImage: articleData.featuredImage || '',
+            author: articleData.author || 'MyNotes Team',
+            category: articleData.category || 'Education',
+            tags: articleData.tags || [],
+            status: articleData.status || 'PUBLISHED',
+            viewsCount: 0,
+            publishedAt: new Date()
+        };
+
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                const newArt = new ArticleModel(record);
+                const saved = await newArt.save();
+                return saved.toObject();
+            } catch (err) {
+                console.error('MongoDB createArticle error:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        data.articles = data.articles || [];
+        data.articles.unshift(record);
+        writeLocalData(data);
+        return record;
+    },
+
+    async getArticles(statusFilter = 'PUBLISHED') {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                const query = statusFilter === 'ALL' ? {} : { status: statusFilter };
+                return await ArticleModel.find(query).sort({ publishedAt: -1 }).lean();
+            } catch (err) {
+                console.error('MongoDB getArticles error:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        const articles = data.articles || [];
+        if (statusFilter === 'ALL') return articles;
+        return articles.filter(a => a.status === statusFilter);
+    },
+
+    async getArticleBySlug(slug) {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                return await ArticleModel.findOne({ slug }).lean();
+            } catch (err) {
+                console.error('MongoDB getArticleBySlug error:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        return (data.articles || []).find(a => a.slug === slug);
+    },
+
+    async deleteArticle(id) {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                return await ArticleModel.findOneAndDelete({ id }).lean();
+            } catch (err) {
+                console.error('MongoDB deleteArticle error:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        const idx = (data.articles || []).findIndex(a => a.id === id);
+        if (idx !== -1) {
+            const [deleted] = data.articles.splice(idx, 1);
+            writeLocalData(data);
+            return deleted;
+        }
+        return null;
+    },
+
+    // Current Affairs & Daily News Operations
+    async saveNewsItems(items = []) {
+        if (!mongoConnected) await connectMongoDB();
+        const savedList = [];
+
+        for (const item of items) {
+            const record = {
+                id: item.id || ('news-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)),
+                title: item.title,
+                summary: item.summary || item.description || '',
+                content: item.content || '',
+                url: item.url || '',
+                source: item.source || 'Education News',
+                imageUrl: item.imageUrl || item.urlToImage || '',
+                category: item.category || 'General',
+                examRelevance: item.examRelevance || ['UPSC', 'GATE', 'SSC', 'Banking'],
+                isFeatured: Boolean(item.isFeatured),
+                isHidden: Boolean(item.isHidden),
+                publishedAt: item.publishedAt ? new Date(item.publishedAt) : new Date()
+            };
+
+            if (mongoConnected) {
+                try {
+                    await NewsModel.updateOne({ title: record.title }, { $setOnInsert: record }, { upsert: true });
+                    savedList.push(record);
+                } catch (e) {}
+            } else {
+                const data = readLocalData();
+                data.news = data.news || [];
+                if (!data.news.some(n => n.title === record.title)) {
+                    data.news.unshift(record);
+                    writeLocalData(data);
+                }
+                savedList.push(record);
+            }
+        }
+        return savedList;
+    },
+
+    async getNewsItems() {
+        if (!mongoConnected) await connectMongoDB();
+        if (mongoConnected) {
+            try {
+                return await NewsModel.find({ isHidden: { $ne: true } }).sort({ publishedAt: -1 }).limit(30).lean();
+            } catch (err) {
+                console.error('MongoDB getNewsItems error:', err.message);
+            }
+        }
+
+        const data = readLocalData();
+        return (data.news || []).filter(n => !n.isHidden).slice(0, 30);
+    },
+
     // Report Note Handler
     async createReport(reportData) {
         const id = 'rep-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
@@ -515,41 +732,64 @@ const db = {
         return record;
     },
 
-    // Dynamic Taxonomy Custom Subjects & Branches
-    async addCustomTaxonomy(type, name, category = 'General', userId = 'system') {
-        const record = { type, name, category, createdBy: userId, createdAt: new Date() };
-
+    async getReports() {
         if (!mongoConnected) await connectMongoDB();
         if (mongoConnected) {
             try {
-                const newTax = new TaxonomyModel(record);
-                const saved = await newTax.save();
-                return saved.toObject();
+                return await ReportModel.find().sort({ createdAt: -1 }).lean();
             } catch (err) {
-                console.error('MongoDB addCustomTaxonomy error:', err.message);
+                console.error('MongoDB getReports error:', err.message);
             }
         }
 
         const data = readLocalData();
-        data.taxonomy = data.taxonomy || [];
-        data.taxonomy.push(record);
-        writeLocalData(data);
-        return record;
+        return data.reports || [];
     },
 
-    async getCustomTaxonomies() {
+    // Admin Dashboard Analytics Generator
+    async getAdminDashboardStats() {
+        let totalUsers = 0;
+        let totalNotes = 0;
+        let totalDownloads = 0;
+        let totalArticles = 0;
+        let totalNews = 0;
+        let totalReports = 0;
+
         if (!mongoConnected) await connectMongoDB();
         if (mongoConnected) {
             try {
-                const list = await TaxonomyModel.find().lean();
-                return list;
+                totalUsers = await User.countDocuments();
+                totalNotes = await FileModel.countDocuments();
+                totalArticles = await ArticleModel.countDocuments();
+                totalNews = await NewsModel.countDocuments();
+                totalReports = await ReportModel.countDocuments({ status: 'pending' });
+
+                const dlStats = await FileModel.aggregate([
+                    { $group: { _id: null, totalDl: { $sum: "$downloadCount" } } }
+                ]);
+                totalDownloads = dlStats[0] ? dlStats[0].totalDl : 0;
             } catch (err) {
-                console.error('MongoDB getCustomTaxonomies error:', err.message);
+                console.error('MongoDB getAdminDashboardStats error:', err.message);
             }
+        } else {
+            const data = readLocalData();
+            totalUsers = (data.users || []).length;
+            totalNotes = (data.files || []).length;
+            totalArticles = (data.articles || []).length;
+            totalNews = (data.news || []).length;
+            totalReports = (data.reports || []).length;
+            totalDownloads = (data.files || []).reduce((acc, f) => acc + (f.downloadCount || 0), 0);
         }
 
-        const data = readLocalData();
-        return data.taxonomy || [];
+        return {
+            totalUsers,
+            totalNotes,
+            totalDownloads,
+            totalArticles,
+            totalNews,
+            totalReports,
+            storageUsage: 'Cloudinary CDN Active'
+        };
     }
 };
 
@@ -558,6 +798,8 @@ module.exports = {
     db,
     User,
     FileModel,
+    ArticleModel,
+    NewsModel,
     ReportModel,
     TaxonomyModel
 };

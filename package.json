@@ -1,11 +1,12 @@
 {
   "name": "mynotes-backend",
   "version": "1.0.0",
-  "description": "Student Notes Sharing Platform with MongoDB and Cloudinary",
+  "description": "Student Notes Sharing Platform with MongoDB, Cloudinary, Articles & News Engine",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "create-admin": "node scripts/create-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
